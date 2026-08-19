@@ -162,9 +162,6 @@ export default function App() {
     );
   }, [settings]);
 
-  /*
-    Completely lock page scrolling.
-  */
   useEffect(() => {
     const preventScroll = (event) => {
       event.preventDefault();
@@ -293,9 +290,7 @@ export default function App() {
     if (isSpinning) return;
 
     setIsSpinning(true);
-
     initAudio();
-
     setViewMode("spinning");
 
     const finalTopic = settings.topic;
@@ -336,11 +331,6 @@ export default function App() {
     setViewMode("selected");
   };
 
-  /*
-    Research timer:
-    When it reaches zero, show SPEAK.
-    Do not automatically start speaking.
-  */
   useEffect(() => {
     let interval = null;
 
@@ -476,9 +466,6 @@ export default function App() {
     });
   };
 
-  /*
-    Desktop mouse wheel.
-  */
   const handleSelectorWheel = (event, type) => {
     event.preventDefault();
 
@@ -490,12 +477,6 @@ export default function App() {
     );
   };
 
-  /*
-    Mobile / touch / trackpad scrolling.
-
-    Pointer Events are used instead of touchstart/touchend.
-    This gives the selector direct control over the gesture.
-  */
   const handleSelectorPointerDown = (
     event,
     type
@@ -532,14 +513,6 @@ export default function App() {
 
     pointer.accumulated += movement;
 
-    /*
-      Every roughly 18px of finger movement
-      changes the value by one.
-
-      This makes mobile scrolling feel natural:
-      swipe up   -> increase
-      swipe down -> decrease
-    */
     const threshold = 18;
 
     while (
@@ -597,14 +570,14 @@ export default function App() {
   });
 
   const secondaryButton =
-    "w-[150px] h-[52px] px-[28px] border border-[#303030] rounded-full bg-[#111] text-[#777] text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all hover:text-white hover:border-[#555] hover:bg-[#181818]";
+    "w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#303030] rounded-full bg-[#111] text-[#777] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all hover:text-white hover:border-[#555] hover:bg-[#181818]";
 
   return (
     <div className="fixed inset-0 w-full h-full overflow-hidden bg-[#050505] text-[#f5f5f5] selection:bg-neutral-800">
 
       {/* HEADER */}
 
-      <header className="absolute top-0 left-0 right-0 h-[78px] px-[34px] flex items-center justify-between z-[100]">
+      <header className="absolute top-0 left-0 right-0 h-[78px] px-[24px] sm:px-[34px] flex items-center justify-between z-[100]">
 
         <div className="text-[18px] font-extrabold tracking-tight select-none">
           OffScripted
@@ -633,16 +606,8 @@ export default function App() {
             <path d="M18 7h2" />
             <path d="M4 17h2" />
             <path d="M10 17h10" />
-            <circle
-              cx="16"
-              cy="7"
-              r="2"
-            />
-            <circle
-              cx="8"
-              cy="17"
-              r="2"
-            />
+            <circle cx="16" cy="7" r="2" />
+            <circle cx="8" cy="17" r="2" />
           </svg>
         </button>
 
@@ -650,7 +615,7 @@ export default function App() {
 
       {/* MAIN */}
 
-      <main className="absolute inset-0 flex items-center justify-center px-[24px] pt-[78px] pb-[58px] overflow-hidden">
+      <main className="absolute inset-0 flex items-center justify-center px-[16px] sm:px-[24px] pt-[78px] pb-[58px] overflow-hidden">
 
         <div className="w-full max-w-[1100px] flex flex-col items-center justify-center text-center">
 
@@ -671,12 +636,12 @@ export default function App() {
               <div className="w-full min-h-[190px] flex items-center justify-center overflow-hidden relative">
 
                 <div
-                  className={`max-w-full px-[20px] break-words ${
+                  className={`max-w-full px-[12px] sm:px-[20px] break-words ${
                     viewMode === "idle"
-                      ? "text-[#707070] text-[clamp(68px,9vw,118px)] font-mono font-black tracking-[-0.08em] leading-none"
+                      ? "text-[#707070] text-[clamp(64px,9vw,118px)] font-mono font-black tracking-[-0.08em] leading-none"
                       : viewMode === "spinning"
-                      ? "text-[#d7d7d7] blur-[0.15px] text-[clamp(42px,7vw,94px)] font-extrabold tracking-[-0.075em]"
-                      : "text-[clamp(40px,6.5vw,88px)] font-extrabold tracking-[-0.075em] text-white animate-topic-reveal"
+                      ? "text-[#d7d7d7] blur-[0.15px] text-[clamp(40px,7vw,94px)] font-extrabold tracking-[-0.075em]"
+                      : "text-[clamp(38px,6.5vw,88px)] font-extrabold tracking-[-0.075em] text-white animate-topic-reveal"
                   }`}
                 >
                   {currentText}
@@ -690,14 +655,14 @@ export default function App() {
           {viewMode !== "activeTimer" &&
             viewMode !== "spinning" &&
             viewMode !== "complete" && (
-              <div className="mt-[48px] flex flex-col items-center justify-center gap-[14px] w-full">
+              <div className="mt-[42px] sm:mt-[48px] flex flex-col items-center justify-center gap-[14px] w-full">
 
-                <div className="flex items-center justify-center gap-[8px]">
+                <div className="flex items-center justify-center gap-[6px] sm:gap-[8px]">
 
                   <button
                     onClick={spin}
                     disabled={isSpinning}
-                    className={`min-w-[150px] h-[52px] px-[28px] border border-white rounded-full bg-white text-[#080808] text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all hover:translate-y-[-2px] hover:bg-[#d8d8d8] active:translate-y-0 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed ${
+                    className={`min-w-[125px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all hover:translate-y-[-2px] hover:bg-[#d8d8d8] active:translate-y-0 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed ${
                       selectedTopic
                         ? "opacity-35 border-[#555] bg-[#161616] text-[#777]"
                         : ""
@@ -711,7 +676,7 @@ export default function App() {
                       startTimer("research")
                     }
                     disabled={!selectedQuestion}
-                    className={`w-[150px] h-[52px] px-[28px] border rounded-full text-[11px] font-bold tracking-[0.08em] cursor-pointer transition-all ${
+                    className={`w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.08em] cursor-pointer transition-all ${
                       selectedQuestion
                         ? "border-white bg-white text-[#080808] hover:bg-[#d8d8d8] hover:translate-y-[-1px]"
                         : "border-[#242424] bg-[#111] text-[#8b8b8b] opacity-25 cursor-pointer pointer-events-none"
@@ -749,24 +714,24 @@ export default function App() {
 
               <div className="h-[22px]" />
 
-              <div className="relative w-[260px] h-[260px] rounded-full flex flex-col items-center justify-center">
+              <div className="relative w-[230px] h-[230px] sm:w-[260px] sm:h-[260px] rounded-full flex flex-col items-center justify-center">
 
                 <svg className="absolute top-0 left-0 w-full h-full -rotate-90 overflow-visible">
 
                   <circle
                     className="fill-none stroke-[#303030]"
-                    cx="130"
-                    cy="130"
-                    r="126"
+                    cx="50%"
+                    cy="50%"
+                    r="calc(50% - 4px)"
                     strokeWidth="6"
                     strokeLinecap="round"
                   />
 
                   <circle
                     className="fill-none stroke-white transition-all duration-1000 linear"
-                    cx="130"
-                    cy="130"
-                    r="126"
+                    cx="50%"
+                    cy="50%"
+                    r="calc(50% - 4px)"
                     strokeWidth="6"
                     strokeLinecap="round"
                     style={{
@@ -787,7 +752,7 @@ export default function App() {
 
                 </svg>
 
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[56px] font-extrabold tracking-[-0.05em] leading-none tabular-nums z-10">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[48px] sm:text-[56px] font-extrabold tracking-[-0.05em] leading-none tabular-nums z-10">
                   {formatTime(
                     remainingSeconds
                   )}
@@ -797,12 +762,12 @@ export default function App() {
 
               <div className="h-[36px]" />
 
-              <div className="flex items-center justify-center gap-[12px]">
+              <div className="flex items-center justify-center gap-[8px] sm:gap-[12px]">
 
                 {timerState === "research" && (
                   <button
                     onClick={finishResearch}
-                    className="w-[150px] h-[52px] px-[28px] border border-white rounded-full bg-white text-[#080808] text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
+                    className="w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
                   >
                     DONE
                   </button>
@@ -813,7 +778,7 @@ export default function App() {
                     onClick={() =>
                       startTimer("speak")
                     }
-                    className="min-w-[150px] h-[52px] px-[28px] border border-white rounded-full bg-white text-[#080808] text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
+                    className="min-w-[125px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
                   >
                     SPEAK
                   </button>
@@ -850,7 +815,7 @@ export default function App() {
 
               <button
                 onClick={spinAgain}
-                className="mt-[40px] h-[48px] px-[25px] border border-white rounded-full bg-white text-[#050505] text-[11px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
+                className="mt-[40px] h-[46px] sm:h-[48px] px-[22px] sm:px-[25px] border border-white rounded-full bg-white text-[#050505] text-[10px] sm:text-[11px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
               >
                 SPIN AGAIN
               </button>
@@ -910,9 +875,9 @@ export default function App() {
       {/* SETTINGS */}
 
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[20px] overflow-hidden">
+        <div className="fixed inset-0 z-[9999] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[16px] sm:p-[20px] overflow-hidden">
 
-          <div className="w-full max-w-[430px] bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[23px] overflow-hidden">
+          <div className="w-full max-w-[430px] max-h-[calc(100vh-32px)] bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[20px] sm:p-[23px] overflow-hidden">
 
             <div className="flex justify-between items-center mb-[27px]">
 
@@ -931,11 +896,11 @@ export default function App() {
 
             </div>
 
-            <div className="grid grid-cols-2 gap-[10px]">
+            <div className="grid grid-cols-2 gap-[8px] sm:gap-[10px]">
 
               {/* SPEECH */}
 
-              <div className="text-center p-[4px_8px_8px]">
+              <div className="text-center p-[4px_4px_8px] sm:p-[4px_8px_8px]">
 
                 <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[25px]">
                   SPEECH
@@ -948,7 +913,7 @@ export default function App() {
                   className="h-[96px] flex items-center justify-center gap-[6px] select-none relative cursor-ns-resize"
                 >
 
-                  <div className="w-[66px] text-right text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
+                  <div className="w-[58px] sm:w-[66px] text-right text-[36px] sm:text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
                     {settings.speakMinutes}
                   </div>
 
@@ -990,7 +955,7 @@ export default function App() {
 
               {/* RESEARCH */}
 
-              <div className="text-center p-[4px_8px_8px]">
+              <div className="text-center p-[4px_4px_8px] sm:p-[4px_8px_8px]">
 
                 <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[25px]">
                   RESEARCH
@@ -1003,7 +968,7 @@ export default function App() {
                   className="h-[96px] flex items-center justify-center gap-[6px] select-none relative cursor-ns-resize"
                 >
 
-                  <div className="w-[66px] text-right text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
+                  <div className="w-[58px] sm:w-[66px] text-right text-[36px] sm:text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
                     {settings.researchMinutes}
                   </div>
 
@@ -1092,7 +1057,7 @@ export default function App() {
                 className="h-[96px] flex items-center justify-center gap-[6px] select-none relative cursor-ns-resize"
               >
 
-                <div className="min-w-[150px] max-w-[230px] text-center text-[32px] leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-hidden text-ellipsis">
+                <div className="min-w-[140px] sm:min-w-[150px] max-w-[210px] sm:max-w-[230px] text-center text-[28px] sm:text-[32px] leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-hidden text-ellipsis">
                   {settings.topic}
                 </div>
 
@@ -1134,7 +1099,7 @@ export default function App() {
                 onClick={() =>
                   setIsSettingsOpen(false)
                 }
-                className="h-[40px] px-[17px] border-none rounded-[9px] bg-white text-[#080808] text-[10px] font-extrabold tracking-[0.08em] cursor-pointer hover:bg-[#d8d8d8]"
+                className="h-[38px] sm:h-[40px] px-[15px] sm:px-[17px] border-none rounded-[9px] bg-white text-[#080808] text-[9px] sm:text-[10px] font-extrabold tracking-[0.08em] cursor-pointer hover:bg-[#d8d8d8]"
               >
                 SAVE CHANGES
               </button>
