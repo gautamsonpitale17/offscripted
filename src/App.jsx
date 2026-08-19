@@ -124,9 +124,38 @@ const questionBanks = {
 
 const topics = Object.keys(questionBanks);
 
+const QUESTION_HISTORY_KEY =
+  "offscript_question_history";
+
+const getInitialQuestionHistory = () => {
+  try {
+    const saved = localStorage.getItem(
+      QUESTION_HISTORY_KEY
+    );
+
+    if (!saved) return {};
+
+    const parsed = JSON.parse(saved);
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed)
+    ) {
+      return parsed;
+    }
+
+    return {};
+  } catch {
+    return {};
+  }
+};
+
 export default function App() {
   const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem("offscript_settings");
+    const saved = localStorage.getItem(
+      "offscript_settings"
+    );
 
     if (saved) {
       try {
@@ -142,19 +171,59 @@ export default function App() {
     };
   });
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [selectedTopic, setSelectedTopic] = useState(null);
-  const [selectedQuestion, setSelectedQuestion] = useState(null);
-  const [currentText, setCurrentText] = useState("READY?");
-  const [timerState, setTimerState] = useState(null);
-  const [remainingSeconds, setRemainingSeconds] = useState(0);
-  const [timerDuration, setTimerDuration] = useState(0);
-  const [viewMode, setViewMode] = useState("idle");
+  /*
+   * Stores questions that have already appeared.
+   *
+   * Example:
+   *
+   * {
+   *   "React.js": [
+   *     "What is JSX?",
+   *     "What are props in React?"
+   *   ],
+   *
+   *   "Python": [
+   *     "What are Python decorators?"
+   *   ]
+   * }
+   */
+  const [questionHistory, setQuestionHistory] =
+    useState(getInitialQuestionHistory);
+
+  const [isSettingsOpen, setIsSettingsOpen] =
+    useState(false);
+
+  const [isSpinning, setIsSpinning] =
+    useState(false);
+
+  const [selectedTopic, setSelectedTopic] =
+    useState(null);
+
+  const [selectedQuestion, setSelectedQuestion] =
+    useState(null);
+
+  const [currentText, setCurrentText] =
+    useState("READY?");
+
+  const [timerState, setTimerState] =
+    useState(null);
+
+  const [remainingSeconds, setRemainingSeconds] =
+    useState(0);
+
+  const [timerDuration, setTimerDuration] =
+    useState(0);
+
+  const [viewMode, setViewMode] =
+    useState("idle");
 
   const audioCtxRef = useRef(null);
+
   const selectorPointerRef = useRef(null);
 
+  /*
+   * Persist settings.
+   */
   useEffect(() => {
     localStorage.setItem(
       "offscript_settings",
@@ -162,66 +231,140 @@ export default function App() {
     );
   }, [settings]);
 
+  /*
+   * Persist question history.
+   *
+   * This means refreshing the page will NOT
+   * cause previously used questions to return.
+   */
+  useEffect(() => {
+    localStorage.setItem(
+      QUESTION_HISTORY_KEY,
+      JSON.stringify(questionHistory)
+    );
+  }, [questionHistory]);
+
+  /*
+   * Prevent the entire application from scrolling.
+   */
   useEffect(() => {
     const preventScroll = (event) => {
       event.preventDefault();
     };
 
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overscrollBehavior = "none";
-    document.body.style.overscrollBehavior = "none";
+    document.documentElement.style.overflow =
+      "hidden";
 
-    window.addEventListener("wheel", preventScroll, {
-      passive: false,
-    });
+    document.body.style.overflow =
+      "hidden";
 
-    window.addEventListener("touchmove", preventScroll, {
-      passive: false,
-    });
+    document.documentElement.style.overscrollBehavior =
+      "none";
+
+    document.body.style.overscrollBehavior =
+      "none";
+
+    window.addEventListener(
+      "wheel",
+      preventScroll,
+      {
+        passive: false,
+      }
+    );
+
+    window.addEventListener(
+      "touchmove",
+      preventScroll,
+      {
+        passive: false,
+      }
+    );
 
     return () => {
-      window.removeEventListener("wheel", preventScroll);
-      window.removeEventListener("touchmove", preventScroll);
+      window.removeEventListener(
+        "wheel",
+        preventScroll
+      );
 
-      document.documentElement.style.overflow = "";
-      document.body.style.overflow = "";
-      document.documentElement.style.overscrollBehavior = "";
-      document.body.style.overscrollBehavior = "";
+      window.removeEventListener(
+        "touchmove",
+        preventScroll
+      );
+
+      document.documentElement.style.overflow =
+        "";
+
+      document.body.style.overflow =
+        "";
+
+      document.documentElement.style.overscrollBehavior =
+        "";
+
+      document.body.style.overscrollBehavior =
+        "";
     };
   }, []);
 
+  /*
+   * Initialize audio.
+   */
   const initAudio = () => {
     if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext ||
-        window.webkitAudioContext)();
+      audioCtxRef.current =
+        new (window.AudioContext ||
+          window.webkitAudioContext)();
     }
 
-    if (audioCtxRef.current.state === "suspended") {
+    if (
+      audioCtxRef.current.state ===
+      "suspended"
+    ) {
       audioCtxRef.current.resume();
     }
   };
 
+  /*
+   * Spinning sound.
+   */
   const playTick = (intensity = 1) => {
-    if (settings.muted || !audioCtxRef.current) return;
+    if (
+      settings.muted ||
+      !audioCtxRef.current
+    ) {
+      return;
+    }
 
-    const now = audioCtxRef.current.currentTime;
+    const now =
+      audioCtxRef.current.currentTime;
 
-    const oscillator = audioCtxRef.current.createOscillator();
-    const gain = audioCtxRef.current.createGain();
+    const oscillator =
+      audioCtxRef.current.createOscillator();
+
+    const gain =
+      audioCtxRef.current.createGain();
 
     oscillator.type = "square";
 
-    oscillator.frequency.setValueAtTime(420, now);
+    oscillator.frequency.setValueAtTime(
+      420,
+      now
+    );
+
     oscillator.frequency.exponentialRampToValueAtTime(
       180,
       now + 0.045
     );
 
-    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.setValueAtTime(
+      0.0001,
+      now
+    );
 
     gain.gain.exponentialRampToValueAtTime(
-      Math.max(0.025, intensity * 0.055),
+      Math.max(
+        0.025,
+        intensity * 0.055
+      ),
       now + 0.005
     );
 
@@ -231,31 +374,49 @@ export default function App() {
     );
 
     oscillator.connect(gain);
-    gain.connect(audioCtxRef.current.destination);
+
+    gain.connect(
+      audioCtxRef.current.destination
+    );
 
     oscillator.start(now);
+
     oscillator.stop(now + 0.05);
   };
 
+  /*
+   * Timer completion sound.
+   */
   const playCompletionSound = () => {
     if (settings.muted) return;
 
     initAudio();
 
-    const now = audioCtxRef.current.currentTime;
+    const now =
+      audioCtxRef.current.currentTime;
 
-    const oscillator = audioCtxRef.current.createOscillator();
-    const gain = audioCtxRef.current.createGain();
+    const oscillator =
+      audioCtxRef.current.createOscillator();
+
+    const gain =
+      audioCtxRef.current.createGain();
 
     oscillator.type = "sine";
 
-    oscillator.frequency.setValueAtTime(520, now);
+    oscillator.frequency.setValueAtTime(
+      520,
+      now
+    );
+
     oscillator.frequency.exponentialRampToValueAtTime(
       720,
       now + 0.18
     );
 
-    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.setValueAtTime(
+      0.0001,
+      now
+    );
 
     gain.gain.exponentialRampToValueAtTime(
       0.07,
@@ -268,69 +429,210 @@ export default function App() {
     );
 
     oscillator.connect(gain);
-    gain.connect(audioCtxRef.current.destination);
+
+    gain.connect(
+      audioCtxRef.current.destination
+    );
 
     oscillator.start(now);
+
     oscillator.stop(now + 0.32);
   };
 
-  const getRandomQuestion = (topic) => {
-    const questions = questionBanks[topic] || [];
+  /*
+   * Get a question that has NOT been used
+   * in the current question cycle.
+   *
+   * If all questions have already been used,
+   * the history for that topic is reset and
+   * a new cycle starts.
+   */
+  const getUniqueQuestion = (topic) => {
+    const questions =
+      questionBanks[topic] || [];
 
     if (!questions.length) {
       return "Tell me everything you know about this technology.";
     }
 
-    return questions[
-      Math.floor(Math.random() * questions.length)
-    ];
+    const usedQuestions =
+      questionHistory[topic] || [];
+
+    let availableQuestions =
+      questions.filter(
+        (question) =>
+          !usedQuestions.includes(question)
+      );
+
+    /*
+     * The entire question bank has been
+     * exhausted.
+     *
+     * Start a fresh cycle.
+     */
+    if (availableQuestions.length === 0) {
+      availableQuestions = [...questions];
+
+      setQuestionHistory((previous) => ({
+        ...previous,
+        [topic]: [],
+      }));
+    }
+
+    const selected =
+      availableQuestions[
+        Math.floor(
+          Math.random() *
+            availableQuestions.length
+        )
+      ];
+
+    /*
+     * Immediately mark this question as used.
+     */
+    setQuestionHistory((previous) => {
+      const currentHistory =
+        previous[topic] || [];
+
+      /*
+       * Safety check.
+       *
+       * This prevents accidental duplication
+       * if the function gets called unexpectedly.
+       */
+      if (
+        currentHistory.includes(selected)
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [topic]: [
+          ...currentHistory,
+          selected,
+        ],
+      };
+    });
+
+    return selected;
   };
 
+  /*
+   * Main spin.
+   */
   const spin = async () => {
     if (isSpinning) return;
 
     setIsSpinning(true);
+
     initAudio();
+
     setViewMode("spinning");
 
-    const finalTopic = settings.topic;
-    const finalQuestion = getRandomQuestion(finalTopic);
+    const finalTopic =
+      settings.topic;
+
+    /*
+     * IMPORTANT:
+     *
+     * This question is selected through
+     * getUniqueQuestion(), so it cannot be
+     * repeated until the topic's entire
+     * question bank has been exhausted.
+     */
+    const finalQuestion =
+      getUniqueQuestion(
+        finalTopic
+      );
 
     const totalTicks =
-      28 + Math.floor(Math.random() * 12);
+      28 +
+      Math.floor(
+        Math.random() * 12
+      );
 
-    for (let i = 0; i < totalTicks; i++) {
+    for (
+      let i = 0;
+      i < totalTicks;
+      i++
+    ) {
       const current =
         i === totalTicks - 1
           ? finalQuestion
-          : getRandomQuestion(
-              topics[
-                Math.floor(Math.random() * topics.length)
-              ]
-            );
+          : getRandomQuestionForAnimation();
 
       setCurrentText(current);
 
-      const progress = i / totalTicks;
+      const progress =
+        i / totalTicks;
 
-      playTick(1 - progress * 0.25);
+      playTick(
+        1 - progress * 0.25
+      );
 
-      await new Promise((resolve) =>
-        setTimeout(
-          resolve,
-          45 + Math.pow(progress, 3) * 390
-        )
+      await new Promise(
+        (resolve) =>
+          setTimeout(
+            resolve,
+            45 +
+              Math.pow(
+                progress,
+                3
+              ) *
+                390
+          )
       );
     }
 
-    setSelectedTopic(finalTopic);
-    setSelectedQuestion(finalQuestion);
-    setCurrentText(finalQuestion);
+    setSelectedTopic(
+      finalTopic
+    );
+
+    setSelectedQuestion(
+      finalQuestion
+    );
+
+    setCurrentText(
+      finalQuestion
+    );
 
     setIsSpinning(false);
+
     setViewMode("selected");
   };
 
+  /*
+   * Questions shown only during the
+   * visual spinning animation.
+   *
+   * These DO NOT get added to history.
+   *
+   * Only the final selected question
+   * is recorded.
+   */
+  const getRandomQuestionForAnimation =
+    () => {
+      const allQuestions =
+        Object.values(
+          questionBanks
+        ).flat();
+
+      if (!allQuestions.length) {
+        return "READY?";
+      }
+
+      return allQuestions[
+        Math.floor(
+          Math.random() *
+            allQuestions.length
+        )
+      ];
+    };
+
+  /*
+   * Timer.
+   */
   useEffect(() => {
     let interval = null;
 
@@ -339,156 +641,292 @@ export default function App() {
       timerState === "speak"
     ) {
       interval = setInterval(() => {
-        setRemainingSeconds((previous) => {
-          if (previous <= 1) {
-            clearInterval(interval);
+        setRemainingSeconds(
+          (previous) => {
+            if (previous <= 1) {
+              clearInterval(
+                interval
+              );
 
-            if (timerState === "research") {
-              playCompletionSound();
+              if (
+                timerState ===
+                "research"
+              ) {
+                playCompletionSound();
 
-              setRemainingSeconds(0);
-              setTimerState("speakReady");
+                setRemainingSeconds(
+                  0
+                );
+
+                /*
+                 * Research finished.
+                 *
+                 * The SPEAK button is now
+                 * displayed.
+                 *
+                 * Speaking does NOT start
+                 * automatically.
+                 */
+                setTimerState(
+                  "speakReady"
+                );
+
+                return 0;
+              }
+
+              if (
+                timerState ===
+                "speak"
+              ) {
+                playCompletionSound();
+
+                setRemainingSeconds(
+                  0
+                );
+
+                setTimerState(
+                  null
+                );
+
+                setViewMode(
+                  "complete"
+                );
+
+                return 0;
+              }
 
               return 0;
             }
 
-            if (timerState === "speak") {
-              playCompletionSound();
-
-              setRemainingSeconds(0);
-              setTimerState(null);
-              setViewMode("complete");
-
-              return 0;
-            }
-
-            return 0;
+            return previous - 1;
           }
-
-          return previous - 1;
-        });
+        );
       }, 1000);
     }
 
-    return () => clearInterval(interval);
+    return () =>
+      clearInterval(interval);
   }, [timerState]);
 
+  /*
+   * Start research or speaking timer.
+   */
   const startTimer = (mode) => {
     const duration =
       (mode === "research"
         ? settings.researchMinutes
-        : settings.speakMinutes) * 60;
+        : settings.speakMinutes) *
+      60;
 
-    setTimerDuration(duration);
-    setRemainingSeconds(duration);
+    setTimerDuration(
+      duration
+    );
+
+    setRemainingSeconds(
+      duration
+    );
+
     setTimerState(mode);
-    setViewMode("activeTimer");
-  };
 
-  const finishResearch = () => {
-    setTimerState("speakReady");
-    setRemainingSeconds(0);
-  };
-
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-
-    return (
-      String(minutes).padStart(2, "0") +
-      ":" +
-      String(secs).padStart(2, "0")
+    setViewMode(
+      "activeTimer"
     );
   };
 
+  /*
+   * Finish research manually.
+   *
+   * This does NOT start speaking.
+   * It shows SPEAK first.
+   */
+  const finishResearch = () => {
+    setTimerState(
+      "speakReady"
+    );
+
+    setRemainingSeconds(0);
+
+    setTimerDuration(0);
+  };
+
+  /*
+   * Format timer.
+   */
+  const formatTime = (
+    seconds
+  ) => {
+    const minutes =
+      Math.floor(
+        seconds / 60
+      );
+
+    const secs =
+      seconds % 60;
+
+    return (
+      String(minutes).padStart(
+        2,
+        "0"
+      ) +
+      ":" +
+      String(secs).padStart(
+        2,
+        "0"
+      )
+    );
+  };
+
+  /*
+   * Close timer.
+   */
   const resetToMain = () => {
     setTimerState(null);
+
     setRemainingSeconds(0);
+
     setTimerDuration(0);
 
     setViewMode(
-      selectedQuestion ? "selected" : "idle"
+      selectedQuestion
+        ? "selected"
+        : "idle"
     );
   };
 
+  /*
+   * Start a completely new cycle.
+   */
   const spinAgain = () => {
     setSelectedTopic(null);
-    setSelectedQuestion(null);
-    setCurrentText("READY?");
+
+    setSelectedQuestion(
+      null
+    );
+
+    setCurrentText(
+      "READY?"
+    );
+
     setRemainingSeconds(0);
+
     setTimerDuration(0);
+
     setTimerState(null);
+
     setViewMode("idle");
   };
 
-  const changeValue = (type, direction) => {
-    setSettings((previous) => {
-      if (type === "speakMinutes") {
+  /*
+   * Change settings.
+   */
+  const changeValue = (
+    type,
+    direction
+  ) => {
+    setSettings(
+      (previous) => {
+        if (
+          type ===
+          "speakMinutes"
+        ) {
+          return {
+            ...previous,
+            speakMinutes:
+              Math.min(
+                10,
+                Math.max(
+                  1,
+                  previous.speakMinutes +
+                    direction
+                )
+              ),
+          };
+        }
+
+        if (
+          type ===
+          "researchMinutes"
+        ) {
+          return {
+            ...previous,
+            researchMinutes:
+              Math.min(
+                30,
+                Math.max(
+                  1,
+                  previous.researchMinutes +
+                    direction
+                )
+              ),
+          };
+        }
+
+        const currentIndex =
+          topics.indexOf(
+            previous.topic
+          );
+
+        const nextIndex =
+          (currentIndex +
+            direction +
+            topics.length) %
+          topics.length;
+
         return {
           ...previous,
-          speakMinutes: Math.min(
-            10,
-            Math.max(
-              1,
-              previous.speakMinutes + direction
-            )
-          ),
+          topic:
+            topics[nextIndex],
         };
       }
-
-      if (type === "researchMinutes") {
-        return {
-          ...previous,
-          researchMinutes: Math.min(
-            30,
-            Math.max(
-              1,
-              previous.researchMinutes + direction
-            )
-          ),
-        };
-      }
-
-      const currentIndex = topics.indexOf(
-        previous.topic
-      );
-
-      const nextIndex =
-        (currentIndex +
-          direction +
-          topics.length) %
-        topics.length;
-
-      return {
-        ...previous,
-        topic: topics[nextIndex],
-      };
-    });
-  };
-
-  const handleSelectorWheel = (event, type) => {
-    event.preventDefault();
-
-    if (Math.abs(event.deltaY) < 2) return;
-
-    changeValue(
-      type,
-      event.deltaY > 0 ? -1 : 1
     );
   };
 
+  /*
+   * Desktop mouse-wheel selector.
+   */
+  const handleSelectorWheel = (
+    event,
+    type
+  ) => {
+    event.preventDefault();
+
+    if (
+      Math.abs(
+        event.deltaY
+      ) < 2
+    ) {
+      return;
+    }
+
+    changeValue(
+      type,
+      event.deltaY > 0
+        ? -1
+        : 1
+    );
+  };
+
+  /*
+   * Mobile touch selector.
+   */
   const handleSelectorPointerDown = (
     event,
     type
   ) => {
-    if (event.pointerType === "mouse") return;
+    if (
+      event.pointerType ===
+      "mouse"
+    ) {
+      return;
+    }
 
-    selectorPointerRef.current = {
-      id: event.pointerId,
-      type,
-      lastY: event.clientY,
-      accumulated: 0,
-    };
+    selectorPointerRef.current =
+      {
+        id: event.pointerId,
+        type,
+        lastY: event.clientY,
+        accumulated: 0,
+      };
 
     event.currentTarget.setPointerCapture?.(
       event.pointerId
@@ -504,71 +942,110 @@ export default function App() {
 
     if (!pointer) return;
 
-    if (pointer.id !== event.pointerId) return;
+    if (
+      pointer.id !==
+      event.pointerId
+    ) {
+      return;
+    }
 
     const movement =
-      pointer.lastY - event.clientY;
+      pointer.lastY -
+      event.clientY;
 
-    pointer.lastY = event.clientY;
+    pointer.lastY =
+      event.clientY;
 
-    pointer.accumulated += movement;
+    pointer.accumulated +=
+      movement;
 
     const threshold = 18;
 
     while (
-      Math.abs(pointer.accumulated) >= threshold
+      Math.abs(
+        pointer.accumulated
+      ) >= threshold
     ) {
       const direction =
-        pointer.accumulated > 0 ? 1 : -1;
+        pointer.accumulated >
+        0
+          ? 1
+          : -1;
 
-      changeValue(type, direction);
+      changeValue(
+        type,
+        direction
+      );
 
       pointer.accumulated -=
-        direction * threshold;
+        direction *
+        threshold;
     }
 
     event.preventDefault();
   };
 
-  const handleSelectorPointerUp = (event) => {
+  const handleSelectorPointerUp = (
+    event
+  ) => {
     const pointer =
       selectorPointerRef.current;
 
     if (
       pointer &&
-      pointer.id === event.pointerId
+      pointer.id ===
+        event.pointerId
     ) {
-      selectorPointerRef.current = null;
+      selectorPointerRef.current =
+        null;
     }
   };
 
-  const selectorEvents = (type) => ({
+  const selectorEvents = (
+    type
+  ) => ({
     onWheel: (event) =>
-      handleSelectorWheel(event, type),
+      handleSelectorWheel(
+        event,
+        type
+      ),
 
-    onPointerDown: (event) =>
+    onPointerDown: (
+      event
+    ) =>
       handleSelectorPointerDown(
         event,
         type
       ),
 
-    onPointerMove: (event) =>
+    onPointerMove: (
+      event
+    ) =>
       handleSelectorPointerMove(
         event,
         type
       ),
 
-    onPointerUp: handleSelectorPointerUp,
+    onPointerUp:
+      handleSelectorPointerUp,
 
-    onPointerCancel: handleSelectorPointerUp,
+    onPointerCancel:
+      handleSelectorPointerUp,
 
     style: {
       touchAction: "none",
       userSelect: "none",
-      WebkitUserSelect: "none",
+      WebkitUserSelect:
+        "none",
     },
   });
 
+  /*
+   * CLOSE button styling.
+   *
+   * Same dimensions as DONE/SPEAK,
+   * but intentionally not highlighted.
+   */
   const secondaryButton =
     "w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#303030] rounded-full bg-[#111] text-[#777] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all hover:text-white hover:border-[#555] hover:bg-[#181818]";
 
@@ -588,7 +1065,9 @@ export default function App() {
 
         <button
           onClick={() =>
-            setIsSettingsOpen(true)
+            setIsSettingsOpen(
+              true
+            )
           }
           className="w-[42px] h-[42px] border border-transparent rounded-full bg-transparent text-[#8b8b8b] grid place-items-center cursor-pointer transition-all hover:text-white hover:bg-[#111] hover:border-[#242424]"
           aria-label="Open settings"
@@ -606,11 +1085,18 @@ export default function App() {
             <path d="M18 7h2" />
             <path d="M4 17h2" />
             <path d="M10 17h10" />
-            <circle cx="16" cy="7" r="2" />
-            <circle cx="8" cy="17" r="2" />
+            <circle
+              cx="16"
+              cy="7"
+              r="2"
+            />
+            <circle
+              cx="8"
+              cy="17"
+              r="2"
+            />
           </svg>
         </button>
-
       </header>
 
       {/* MAIN */}
@@ -621,25 +1107,33 @@ export default function App() {
 
           {/* TOPIC LABEL */}
 
-          {viewMode !== "activeTimer" &&
-            viewMode !== "spinning" &&
-            viewMode !== "complete" && (
+          {viewMode !==
+            "activeTimer" &&
+            viewMode !==
+              "spinning" &&
+            viewMode !==
+              "complete" && (
               <div className="text-[#777] text-[10px] font-bold tracking-[0.22em] uppercase mb-[30px] min-h-[12px]">
-                {selectedTopic || "YOUR TOPIC"}
+                {selectedTopic ||
+                  "YOUR TOPIC"}
               </div>
             )}
 
-          {/* READY / QUESTION */}
+          {/* QUESTION */}
 
-          {viewMode !== "activeTimer" &&
-            viewMode !== "complete" && (
+          {viewMode !==
+            "activeTimer" &&
+            viewMode !==
+              "complete" && (
               <div className="w-full min-h-[190px] flex items-center justify-center overflow-hidden relative">
 
                 <div
                   className={`max-w-full px-[12px] sm:px-[20px] break-words ${
-                    viewMode === "idle"
+                    viewMode ===
+                    "idle"
                       ? "text-[#707070] text-[clamp(64px,9vw,118px)] font-mono font-black tracking-[-0.08em] leading-none"
-                      : viewMode === "spinning"
+                      : viewMode ===
+                        "spinning"
                       ? "text-[#d7d7d7] blur-[0.15px] text-[clamp(40px,7vw,94px)] font-extrabold tracking-[-0.075em]"
                       : "text-[clamp(38px,6.5vw,88px)] font-extrabold tracking-[-0.075em] text-white animate-topic-reveal"
                   }`}
@@ -650,18 +1144,23 @@ export default function App() {
               </div>
             )}
 
-          {/* MAIN BUTTONS */}
+          {/* ACTION BUTTONS */}
 
-          {viewMode !== "activeTimer" &&
-            viewMode !== "spinning" &&
-            viewMode !== "complete" && (
+          {viewMode !==
+            "activeTimer" &&
+            viewMode !==
+              "spinning" &&
+            viewMode !==
+              "complete" && (
               <div className="mt-[42px] sm:mt-[48px] flex flex-col items-center justify-center gap-[14px] w-full">
 
                 <div className="flex items-center justify-center gap-[6px] sm:gap-[8px]">
 
                   <button
                     onClick={spin}
-                    disabled={isSpinning}
+                    disabled={
+                      isSpinning
+                    }
                     className={`min-w-[125px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all hover:translate-y-[-2px] hover:bg-[#d8d8d8] active:translate-y-0 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed ${
                       selectedTopic
                         ? "opacity-35 border-[#555] bg-[#161616] text-[#777]"
@@ -673,9 +1172,13 @@ export default function App() {
 
                   <button
                     onClick={() =>
-                      startTimer("research")
+                      startTimer(
+                        "research"
+                      )
                     }
-                    disabled={!selectedQuestion}
+                    disabled={
+                      !selectedQuestion
+                    }
                     className={`w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.08em] cursor-pointer transition-all ${
                       selectedQuestion
                         ? "border-white bg-white text-[#080808] hover:bg-[#d8d8d8] hover:translate-y-[-1px]"
@@ -692,7 +1195,8 @@ export default function App() {
 
           {/* TIMER */}
 
-          {viewMode === "activeTimer" && (
+          {viewMode ===
+            "activeTimer" && (
             <div className="flex flex-col items-center justify-center w-full">
 
               <div className="max-w-[900px] text-[clamp(14px,2.2vw,22px)] font-bold text-white text-center mb-[30px]">
@@ -700,13 +1204,15 @@ export default function App() {
                   selectedTopic}
               </div>
 
-              {timerState === "research" && (
+              {timerState ===
+                "research" && (
                 <div className="text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center mb-[24px]">
                   RESEARCHING
                 </div>
               )}
 
-              {timerState === "speak" && (
+              {timerState ===
+                "speak" && (
                 <div className="text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center mb-[24px]">
                   SPEAKING
                 </div>
@@ -764,19 +1270,25 @@ export default function App() {
 
               <div className="flex items-center justify-center gap-[8px] sm:gap-[12px]">
 
-                {timerState === "research" && (
+                {timerState ===
+                  "research" && (
                   <button
-                    onClick={finishResearch}
+                    onClick={
+                      finishResearch
+                    }
                     className="w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
                   >
                     DONE
                   </button>
                 )}
 
-                {timerState === "speakReady" && (
+                {timerState ===
+                  "speakReady" && (
                   <button
                     onClick={() =>
-                      startTimer("speak")
+                      startTimer(
+                        "speak"
+                      )
                     }
                     className="min-w-[125px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
                   >
@@ -785,8 +1297,12 @@ export default function App() {
                 )}
 
                 <button
-                  onClick={resetToMain}
-                  className={secondaryButton}
+                  onClick={
+                    resetToMain
+                  }
+                  className={
+                    secondaryButton
+                  }
                 >
                   CLOSE
                 </button>
@@ -798,7 +1314,8 @@ export default function App() {
 
           {/* COMPLETE */}
 
-          {viewMode === "complete" && (
+          {viewMode ===
+            "complete" && (
             <div className="flex flex-col items-center justify-center text-center w-full">
 
               <div className="text-[#8b8b8b] text-[10px] font-bold tracking-[0.2em] uppercase mb-[25px]">
@@ -810,11 +1327,14 @@ export default function App() {
               </div>
 
               <div className="text-[#8b8b8b] mt-[20px] text-[13px]">
-                Ready for another topic?
+                Ready for another
+                topic?
               </div>
 
               <button
-                onClick={spinAgain}
+                onClick={
+                  spinAgain
+                }
                 className="mt-[40px] h-[46px] sm:h-[48px] px-[22px] sm:px-[25px] border border-white rounded-full bg-white text-[#050505] text-[10px] sm:text-[11px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
               >
                 SPIN AGAIN
@@ -837,7 +1357,8 @@ export default function App() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          made by @__gautam17
+          made by
+          @__gautam17
 
           <svg
             className="w-[14px] h-[14px]"
@@ -872,7 +1393,7 @@ export default function App() {
 
       </footer>
 
-      {/* SETTINGS */}
+      {/* SETTINGS MODAL */}
 
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[16px] sm:p-[20px] overflow-hidden">
@@ -887,7 +1408,9 @@ export default function App() {
 
               <button
                 onClick={() =>
-                  setIsSettingsOpen(false)
+                  setIsSettingsOpen(
+                    false
+                  )
                 }
                 className="w-[32px] h-[32px] border border-[#242424] rounded-full bg-transparent text-[#8b8b8b] cursor-pointer text-[18px] leading-none hover:text-white hover:bg-[#181818]"
               >
@@ -914,7 +1437,9 @@ export default function App() {
                 >
 
                   <div className="w-[58px] sm:w-[66px] text-right text-[36px] sm:text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
-                    {settings.speakMinutes}
+                    {
+                      settings.speakMinutes
+                    }
                   </div>
 
                   <div className="text-[#5c5c5c] text-[11px] font-bold self-center">
@@ -969,7 +1494,9 @@ export default function App() {
                 >
 
                   <div className="w-[58px] sm:w-[66px] text-right text-[36px] sm:text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
-                    {settings.researchMinutes}
+                    {
+                      settings.researchMinutes
+                    }
                   </div>
 
                   <div className="text-[#5c5c5c] text-[11px] font-bold self-center">
@@ -1020,10 +1547,13 @@ export default function App() {
 
               <button
                 onClick={() =>
-                  setSettings((s) => ({
-                    ...s,
-                    muted: !s.muted,
-                  }))
+                  setSettings(
+                    (s) => ({
+                      ...s,
+                      muted:
+                        !s.muted,
+                    })
+                  )
                 }
                 className={`w-[46px] h-[25px] p-[2px] border rounded-full cursor-pointer relative transition-all ${
                   !settings.muted
@@ -1053,7 +1583,9 @@ export default function App() {
               </div>
 
               <div
-                {...selectorEvents("topic")}
+                {...selectorEvents(
+                  "topic"
+                )}
                 className="h-[96px] flex items-center justify-center gap-[6px] select-none relative cursor-ns-resize"
               >
 
@@ -1097,7 +1629,9 @@ export default function App() {
 
               <button
                 onClick={() =>
-                  setIsSettingsOpen(false)
+                  setIsSettingsOpen(
+                    false
+                  )
                 }
                 className="h-[38px] sm:h-[40px] px-[15px] sm:px-[17px] border-none rounded-[9px] bg-white text-[#080808] text-[9px] sm:text-[10px] font-extrabold tracking-[0.08em] cursor-pointer hover:bg-[#d8d8d8]"
               >
