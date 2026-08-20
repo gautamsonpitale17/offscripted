@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 const questionBanks = {
   API: [
@@ -6,7 +6,7 @@ const questionBanks = {
     "What is the difference between REST and SOAP?",
     "What are HTTP methods?",
     "What is the difference between PUT and PATCH?",
-    "What is JWT?",
+    "What are HTTP status codes?",
   ],
 
   Framer: [
@@ -59,10 +59,10 @@ const questionBanks = {
 
   Python: [
     "What is Python and what are its key features?",
+    "Why is Python considered an interpreted language?",
+    "What are Python data types?",
     "What are mutable and immutable types in Python?",
     "What is the difference between list, tuple, set, and dictionary?",
-    "What are Python decorators?",
-    "What is the Global Interpreter Lock (GIL)?",
   ],
 
   "React.js": [
@@ -77,8 +77,8 @@ const questionBanks = {
     "What is React Router?",
     "What is client-side routing?",
     "What is BrowserRouter?",
+    "What are Routes?",
     "What is useNavigate?",
-    "What is nested routing?",
   ],
 
   SQL: [
@@ -94,7 +94,7 @@ const questionBanks = {
     "Why is Tailwind CSS called a utility-first framework?",
     "What are utility classes?",
     "What are responsive utilities in Tailwind?",
-    "What are arbitrary values in Tailwind?",
+    "What is the Tailwind configuration file?",
   ],
 
   DSA: [
@@ -118,49 +118,22 @@ const questionBanks = {
     "What is semantic HTML?",
     "What are HTML attributes?",
     "What is the difference between div and section?",
-    "What is accessibility in HTML?",
+    "What is the difference between block and inline elements?",
   ],
 };
 
 const topics = Object.keys(questionBanks);
 
-const QUESTION_HISTORY_KEY =
-  "offscript_question_history";
-
-const getInitialQuestionHistory = () => {
-  try {
-    const saved = localStorage.getItem(
-      QUESTION_HISTORY_KEY
-    );
-
-    if (!saved) return {};
-
-    const parsed = JSON.parse(saved);
-
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed)
-    ) {
-      return parsed;
-    }
-
-    return {};
-  } catch {
-    return {};
-  }
-};
-
 export default function App() {
   const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem(
-      "offscript_settings"
-    );
+    const saved = localStorage.getItem("offscript_settings");
 
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch {}
+      } catch {
+        // fallback
+      }
     }
 
     return {
@@ -168,1188 +141,790 @@ export default function App() {
       researchMinutes: 10,
       muted: false,
       topic: "Python",
+      speakingMode: "normal",
     };
   });
 
-  /*
-   * Stores questions that have already appeared.
-   *
-   * Example:
-   *
-   * {
-   *   "React.js": [
-   *     "What is JSX?",
-   *     "What are props in React?"
-   *   ],
-   *
-   *   "Python": [
-   *     "What are Python decorators?"
-   *   ]
-   * }
-   */
-  const [questionHistory, setQuestionHistory] =
-    useState(getInitialQuestionHistory);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSpinning, setIsSpinning] = useState(false);
 
-  const [isSettingsOpen, setIsSettingsOpen] =
-    useState(false);
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [selectedQuestion, setSelectedQuestion] = useState(null);
 
-  const [isSpinning, setIsSpinning] =
-    useState(false);
+  const [currentText, setCurrentText] = useState("READY?");
+  const [timerState, setTimerState] = useState(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [timerDuration, setTimerDuration] = useState(0);
 
-  const [selectedTopic, setSelectedTopic] =
-    useState(null);
+  const [isComplete, setIsComplete] = useState(false);
+  const [viewMode, setViewMode] = useState("idle");
 
-  const [selectedQuestion, setSelectedQuestion] =
-    useState(null);
+  const [recordingMode, setRecordingMode] = useState(null);
 
-  const [currentText, setCurrentText] =
-    useState("READY?");
-
-  const [timerState, setTimerState] =
-    useState(null);
-
-  const [remainingSeconds, setRemainingSeconds] =
-    useState(0);
-
-  const [timerDuration, setTimerDuration] =
-    useState(0);
-
-  const [viewMode, setViewMode] =
-    useState("idle");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState(null);
+  const [recordingBlob, setRecordingBlob] = useState(null);
 
   const audioCtxRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const videoRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
-  const selectorPointerRef = useRef(null);
+  const usedQuestionsRef = useRef({});
 
-  /*
-   * Persist settings.
-   */
   useEffect(() => {
-    localStorage.setItem(
-      "offscript_settings",
-      JSON.stringify(settings)
-    );
+    localStorage.setItem("offscript_settings", JSON.stringify(settings));
   }, [settings]);
 
-  /*
-   * Persist question history.
-   *
-   * This means refreshing the page will NOT
-   * cause previously used questions to return.
-   */
   useEffect(() => {
-    localStorage.setItem(
-      QUESTION_HISTORY_KEY,
-      JSON.stringify(questionHistory)
-    );
-  }, [questionHistory]);
+    return () => {
+      if (recordingUrl) {
+        URL.revokeObjectURL(recordingUrl);
+      }
 
-  /*
-   * Prevent the entire application from scrolling.
-   */
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [recordingUrl]);
+
+  /* KEYBOARD ACCESSIBILITY */
   useEffect(() => {
-    const preventScroll = (event) => {
-      event.preventDefault();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && isSettingsOpen) {
+        setIsSettingsOpen(false);
+        return;
+      }
+
+      if (event.key === "Enter" && !isSettingsOpen && !isComplete) {
+        if (viewMode === "idle" && !isSpinning) {
+          spin();
+        } else if (
+          viewMode === "selected" &&
+          selectedQuestion &&
+          !isSpinning
+        ) {
+          startResearchTimer();
+        } else if (timerState === "speakReady") {
+          handleSpeakButton();
+        }
+      }
+
+      if (event.key === "Escape" && isComplete) {
+        closeCompletedSession();
+      }
     };
 
-    document.documentElement.style.overflow =
-      "hidden";
-
-    document.body.style.overflow =
-      "hidden";
-
-    document.documentElement.style.overscrollBehavior =
-      "none";
-
-    document.body.style.overscrollBehavior =
-      "none";
-
-    window.addEventListener(
-      "wheel",
-      preventScroll,
-      {
-        passive: false,
-      }
-    );
-
-    window.addEventListener(
-      "touchmove",
-      preventScroll,
-      {
-        passive: false,
-      }
-    );
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      window.removeEventListener(
-        "wheel",
-        preventScroll
-      );
-
-      window.removeEventListener(
-        "touchmove",
-        preventScroll
-      );
-
-      document.documentElement.style.overflow =
-        "";
-
-      document.body.style.overflow =
-        "";
-
-      document.documentElement.style.overscrollBehavior =
-        "";
-
-      document.body.style.overscrollBehavior =
-        "";
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [
+    isSettingsOpen,
+    isComplete,
+    viewMode,
+    isSpinning,
+    selectedQuestion,
+    timerState,
+  ]);
 
-  /*
-   * Initialize audio.
-   */
-  const initAudio = () => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current =
-        new (window.AudioContext ||
-          window.webkitAudioContext)();
+  /* PREVENT BACKGROUND SCROLLING WHILE MODALS ARE OPEN */
+  useEffect(() => {
+    const modalOpen = isSettingsOpen || isComplete;
+
+    if (modalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
     }
 
-    if (
-      audioCtxRef.current.state ===
-      "suspended"
-    ) {
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isSettingsOpen, isComplete]);
+
+  const initAudio = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext ||
+        window.webkitAudioContext)();
+    }
+
+    if (audioCtxRef.current.state === "suspended") {
       audioCtxRef.current.resume();
     }
   };
 
-  /*
-   * Spinning sound.
-   */
   const playTick = (intensity = 1) => {
-    if (
-      settings.muted ||
-      !audioCtxRef.current
-    ) {
-      return;
-    }
+    if (settings.muted || !audioCtxRef.current) return;
 
-    const now =
-      audioCtxRef.current.currentTime;
+    const now = audioCtxRef.current.currentTime;
 
-    const oscillator =
-      audioCtxRef.current.createOscillator();
+    const oscillator = audioCtxRef.current.createOscillator();
+    const gain = audioCtxRef.current.createGain();
 
-    const gain =
-      audioCtxRef.current.createGain();
+    oscillator.type = "sine";
 
-    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(520, now);
+    oscillator.frequency.exponentialRampToValueAtTime(180, now + 0.065);
 
-    oscillator.frequency.setValueAtTime(
-      420,
-      now
-    );
-
-    oscillator.frequency.exponentialRampToValueAtTime(
-      180,
-      now + 0.045
-    );
-
-    gain.gain.setValueAtTime(
-      0.0001,
-      now
-    );
-
+    gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(
-      Math.max(
-        0.025,
-        intensity * 0.055
-      ),
-      now + 0.005
+      Math.max(0.0001, 0.018 * intensity),
+      now + 0.012
     );
-
-    gain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      now + 0.045
-    );
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
 
     oscillator.connect(gain);
-
-    gain.connect(
-      audioCtxRef.current.destination
-    );
+    gain.connect(audioCtxRef.current.destination);
 
     oscillator.start(now);
-
-    oscillator.stop(now + 0.05);
+    oscillator.stop(now + 0.08);
   };
 
-  /*
-   * Timer completion sound.
-   */
   const playCompletionSound = () => {
     if (settings.muted) return;
 
     initAudio();
 
-    const now =
-      audioCtxRef.current.currentTime;
+    if (!audioCtxRef.current) return;
 
-    const oscillator =
-      audioCtxRef.current.createOscillator();
+    const now = audioCtxRef.current.currentTime;
 
-    const gain =
-      audioCtxRef.current.createGain();
+    const oscillator = audioCtxRef.current.createOscillator();
+    const gain = audioCtxRef.current.createGain();
 
     oscillator.type = "sine";
 
-    oscillator.frequency.setValueAtTime(
-      520,
-      now
-    );
+    oscillator.frequency.setValueAtTime(420, now);
+    oscillator.frequency.exponentialRampToValueAtTime(620, now + 0.16);
+    oscillator.frequency.exponentialRampToValueAtTime(760, now + 0.34);
 
-    oscillator.frequency.exponentialRampToValueAtTime(
-      720,
-      now + 0.18
-    );
-
-    gain.gain.setValueAtTime(
-      0.0001,
-      now
-    );
-
-    gain.gain.exponentialRampToValueAtTime(
-      0.07,
-      now + 0.02
-    );
-
-    gain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      now + 0.3
-    );
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.035);
+    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
 
     oscillator.connect(gain);
-
-    gain.connect(
-      audioCtxRef.current.destination
-    );
+    gain.connect(audioCtxRef.current.destination);
 
     oscillator.start(now);
-
-    oscillator.stop(now + 0.32);
+    oscillator.stop(now + 0.44);
   };
 
-  /*
-   * Get a question that has NOT been used
-   * in the current question cycle.
-   *
-   * If all questions have already been used,
-   * the history for that topic is reset and
-   * a new cycle starts.
-   */
-  const getUniqueQuestion = (topic) => {
-    const questions =
-      questionBanks[topic] || [];
+  const getRandomQuestion = (topic) => {
+    const questions = questionBanks[topic] || [];
 
     if (!questions.length) {
       return "Tell me everything you know about this technology.";
     }
 
-    const usedQuestions =
-      questionHistory[topic] || [];
-
-    let availableQuestions =
-      questions.filter(
-        (question) =>
-          !usedQuestions.includes(question)
-      );
-
-    /*
-     * The entire question bank has been
-     * exhausted.
-     *
-     * Start a fresh cycle.
-     */
-    if (availableQuestions.length === 0) {
-      availableQuestions = [...questions];
-
-      setQuestionHistory((previous) => ({
-        ...previous,
-        [topic]: [],
-      }));
+    if (!usedQuestionsRef.current[topic]) {
+      usedQuestionsRef.current[topic] = [];
     }
 
-    const selected =
+    let used = usedQuestionsRef.current[topic];
+
+    if (used.length >= questions.length) {
+      usedQuestionsRef.current[topic] = [];
+      used = [];
+    }
+
+    const availableQuestions = questions.filter(
+      (question) => !used.includes(question)
+    );
+
+    const randomQuestion =
       availableQuestions[
-        Math.floor(
-          Math.random() *
-            availableQuestions.length
-        )
+        Math.floor(Math.random() * availableQuestions.length)
       ];
 
-    /*
-     * Immediately mark this question as used.
-     */
-    setQuestionHistory((previous) => {
-      const currentHistory =
-        previous[topic] || [];
+    usedQuestionsRef.current[topic].push(randomQuestion);
 
-      /*
-       * Safety check.
-       *
-       * This prevents accidental duplication
-       * if the function gets called unexpectedly.
-       */
-      if (
-        currentHistory.includes(selected)
-      ) {
-        return previous;
-      }
-
-      return {
-        ...previous,
-        [topic]: [
-          ...currentHistory,
-          selected,
-        ],
-      };
-    });
-
-    return selected;
+    return randomQuestion;
   };
 
-  /*
-   * Main spin.
-   */
   const spin = async () => {
     if (isSpinning) return;
 
+    setIsComplete(false);
     setIsSpinning(true);
 
-    initAudio();
+    /*
+      SPIN ALWAYS WORKS.
 
+      Once a new spin starts, the previous selected question is cleared.
+      This makes RESEARCH disabled while the wheel is spinning and keeps
+      SPIN as the active/highlighted action.
+    */
+    setSelectedQuestion(null);
+    setCurrentText("READY?");
+
+    initAudio();
     setViewMode("spinning");
 
-    const finalTopic =
-      settings.topic;
+    const finalTopic = settings.topic;
+    const finalQuestion = getRandomQuestion(finalTopic);
 
-    /*
-     * IMPORTANT:
-     *
-     * This question is selected through
-     * getUniqueQuestion(), so it cannot be
-     * repeated until the topic's entire
-     * question bank has been exhausted.
-     */
-    const finalQuestion =
-      getUniqueQuestion(
-        finalTopic
-      );
+    const totalTicks = 28 + Math.floor(Math.random() * 12);
 
-    const totalTicks =
-      28 +
-      Math.floor(
-        Math.random() * 12
-      );
+    for (let i = 0; i < totalTicks; i++) {
+      let currentQuestion;
 
-    for (
-      let i = 0;
-      i < totalTicks;
-      i++
-    ) {
-      const current =
-        i === totalTicks - 1
-          ? finalQuestion
-          : getRandomQuestionForAnimation();
+      if (i === totalTicks - 1) {
+        currentQuestion = finalQuestion;
+      } else {
+        const randomTopic =
+          topics[Math.floor(Math.random() * topics.length)];
 
-      setCurrentText(current);
+        const randomQuestions = questionBanks[randomTopic] || [];
 
-      const progress =
-        i / totalTicks;
+        currentQuestion =
+          randomQuestions[
+            Math.floor(Math.random() * randomQuestions.length)
+          ];
+      }
 
-      playTick(
-        1 - progress * 0.25
-      );
+      setCurrentText(currentQuestion);
 
-      await new Promise(
-        (resolve) =>
-          setTimeout(
-            resolve,
-            45 +
-              Math.pow(
-                progress,
-                3
-              ) *
-                390
-          )
+      const progress = i / totalTicks;
+
+      playTick(1 - progress * 0.25);
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 45 + Math.pow(progress, 3) * 390)
       );
     }
 
-    setSelectedTopic(
-      finalTopic
-    );
-
-    setSelectedQuestion(
-      finalQuestion
-    );
-
-    setCurrentText(
-      finalQuestion
-    );
+    setSelectedTopic(finalTopic);
+    setSelectedQuestion(finalQuestion);
+    setCurrentText(finalQuestion);
 
     setIsSpinning(false);
-
     setViewMode("selected");
   };
 
-  /*
-   * Questions shown only during the
-   * visual spinning animation.
-   *
-   * These DO NOT get added to history.
-   *
-   * Only the final selected question
-   * is recorded.
-   */
-  const getRandomQuestionForAnimation =
-    () => {
-      const allQuestions =
-        Object.values(
-          questionBanks
-        ).flat();
-
-      if (!allQuestions.length) {
-        return "READY?";
-      }
-
-      return allQuestions[
-        Math.floor(
-          Math.random() *
-            allQuestions.length
-        )
-      ];
-    };
-
-  /*
-   * Timer.
-   */
   useEffect(() => {
     let interval = null;
 
-    if (
-      timerState === "research" ||
-      timerState === "speak"
-    ) {
+    if (timerState === "research" || timerState === "speak") {
       interval = setInterval(() => {
-        setRemainingSeconds(
-          (previous) => {
-            if (previous <= 1) {
-              clearInterval(
-                interval
-              );
+        setRemainingSeconds((previous) => {
+          if (previous <= 1) {
+            clearInterval(interval);
+
+            if (timerState === "research") {
+              playCompletionSound();
+              setTimerState("speakReady");
+            } else {
+              playCompletionSound();
 
               if (
-                timerState ===
-                "research"
+                recordingMode === "audio" ||
+                recordingMode === "video"
               ) {
-                playCompletionSound();
-
-                setRemainingSeconds(
-                  0
-                );
-
-                /*
-                 * Research finished.
-                 *
-                 * The SPEAK button is now
-                 * displayed.
-                 *
-                 * Speaking does NOT start
-                 * automatically.
-                 */
-                setTimerState(
-                  "speakReady"
-                );
-
-                return 0;
+                stopMediaRecording();
               }
 
-              if (
-                timerState ===
-                "speak"
-              ) {
-                playCompletionSound();
-
-                setRemainingSeconds(
-                  0
-                );
-
-                setTimerState(
-                  null
-                );
-
-                setViewMode(
-                  "complete"
-                );
-
-                return 0;
-              }
-
-              return 0;
+              setIsComplete(true);
+              setTimerState(null);
+              setViewMode("idle");
             }
 
-            return previous - 1;
+            return 0;
           }
-        );
+
+          return previous - 1;
+        });
       }, 1000);
     }
 
-    return () =>
-      clearInterval(interval);
-  }, [timerState]);
+    return () => clearInterval(interval);
+  }, [timerState, recordingMode]);
 
-  /*
-   * Start research or speaking timer.
-   */
-  const startTimer = (mode) => {
-    const duration =
-      (mode === "research"
-        ? settings.researchMinutes
-        : settings.speakMinutes) *
-      60;
+  const startResearchTimer = () => {
+    if (!selectedQuestion) return;
 
-    setTimerDuration(
-      duration
-    );
+    const duration = settings.researchMinutes * 60;
 
-    setRemainingSeconds(
-      duration
-    );
-
-    setTimerState(mode);
-
-    setViewMode(
-      "activeTimer"
-    );
+    setTimerDuration(duration);
+    setRemainingSeconds(duration);
+    setTimerState("research");
+    setViewMode("activeTimer");
   };
 
-  /*
-   * Finish research manually.
-   *
-   * This does NOT start speaking.
-   * It shows SPEAK first.
-   */
-  const finishResearch = () => {
-    setTimerState(
-      "speakReady"
-    );
-
-    setRemainingSeconds(0);
-
-    setTimerDuration(0);
+  const handleDoneResearch = () => {
+    setTimerState("speakReady");
+    setRecordingMode(null);
   };
 
-  /*
-   * Format timer.
-   */
-  const formatTime = (
-    seconds
-  ) => {
-    const minutes =
-      Math.floor(
-        seconds / 60
+  const handleSpeakButton = async () => {
+    if (settings.speakingMode === "normal") {
+      startNormalSpeaking();
+    } else if (settings.speakingMode === "audio") {
+      await startAudioSpeaking();
+    } else if (settings.speakingMode === "video") {
+      await startVideoSpeaking();
+    }
+  };
+
+  const startNormalSpeaking = () => {
+    const duration = settings.speakMinutes * 60;
+
+    setRecordingMode("normal");
+    setTimerDuration(duration);
+    setRemainingSeconds(duration);
+    setTimerState("speak");
+    setViewMode("activeTimer");
+  };
+
+  const createRecorder = (stream, mode) => {
+    audioChunksRef.current = [];
+
+    let options = {};
+
+    if (mode === "video") {
+      if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")) {
+        options.mimeType = "video/webm;codecs=vp9,opus";
+      } else if (MediaRecorder.isTypeSupported("video/webm")) {
+        options.mimeType = "video/webm";
+      }
+    } else {
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        options.mimeType = "audio/webm;codecs=opus";
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        options.mimeType = "audio/webm";
+      }
+    }
+
+    const recorder = new MediaRecorder(stream, options);
+
+    mediaRecorderRef.current = recorder;
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunksRef.current.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      const mimeType =
+        recorder.mimeType ||
+        (mode === "video" ? "video/webm" : "audio/webm");
+
+      const blob = new Blob(audioChunksRef.current, {
+        type: mimeType,
+      });
+
+      const url = URL.createObjectURL(blob);
+
+      setRecordingBlob(blob);
+      setRecordingUrl(url);
+
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+      }
+
+      setIsRecording(false);
+    };
+
+    recorder.start();
+    setIsRecording(true);
+
+    const duration = settings.speakMinutes * 60;
+
+    setTimerDuration(duration);
+    setRemainingSeconds(duration);
+    setTimerState("speak");
+    setViewMode("activeTimer");
+  };
+
+  const startAudioSpeaking = async () => {
+    try {
+      if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+      ) {
+        alert("Audio recording is not supported by this browser.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+
+      mediaStreamRef.current = stream;
+      setRecordingMode("audio");
+
+      createRecorder(stream, "audio");
+    } catch (error) {
+      console.error(error);
+      alert("Microphone permission is required for audio recording.");
+      setRecordingMode(null);
+    }
+  };
+
+  const startVideoSpeaking = async () => {
+    try {
+      if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+      ) {
+        alert("Video recording is not supported by this browser.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+
+      mediaStreamRef.current = stream;
+      setRecordingMode("video");
+
+      createRecorder(stream, "video");
+    } catch (error) {
+      console.error(error);
+      alert(
+        "Camera and microphone permission are required for video recording."
       );
+      setRecordingMode(null);
+    }
+  };
 
-    const secs =
-      seconds % 60;
+  const stopMediaRecording = () => {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
+      mediaRecorderRef.current.stop();
+    }
+  };
 
-    return (
-      String(minutes).padStart(
-        2,
-        "0"
-      ) +
-      ":" +
-      String(secs).padStart(
-        2,
-        "0"
-      )
-    );
+  const closeTimer = () => {
+    if (isRecording) {
+      stopMediaRecording();
+    }
+
+    setTimerState(null);
+    setRecordingMode(null);
+
+    setViewMode(selectedQuestion ? "selected" : "idle");
   };
 
   /*
-   * Close timer.
-   */
-  const resetToMain = () => {
-    setTimerState(null);
+    CLOSE AFTER SESSION
 
-    setRemainingSeconds(0);
+    Important:
+    - Keep selectedTopic so the same topic remains visible.
+    - Clear selectedQuestion so the next state is "before spin".
+    - Therefore SPIN is highlighted/enabled.
+    - RESEARCH is disabled/non-highlighted.
+    - The user can immediately spin again.
+  */
+  const closeCompletedSession = () => {
+    if (isRecording) {
+      stopMediaRecording();
+    }
 
-    setTimerDuration(0);
+    if (recordingUrl) {
+      URL.revokeObjectURL(recordingUrl);
+    }
 
-    setViewMode(
-      selectedQuestion
-        ? "selected"
-        : "idle"
-    );
-  };
+    setRecordingUrl(null);
+    setRecordingBlob(null);
 
-  /*
-   * Start a completely new cycle.
-   */
-  const spinAgain = () => {
-    setSelectedTopic(null);
+    setIsComplete(false);
 
-    setSelectedQuestion(
-      null
-    );
+    // KEEP selectedTopic from the previous session.
+    setSelectedQuestion(null);
 
-    setCurrentText(
-      "READY?"
-    );
-
-    setRemainingSeconds(0);
-
-    setTimerDuration(0);
+    setCurrentText("READY?");
 
     setTimerState(null);
+    setRecordingMode(null);
+    setIsRecording(false);
 
     setViewMode("idle");
   };
 
-  /*
-   * Change settings.
-   */
-  const changeValue = (
-    type,
-    direction
-  ) => {
-    setSettings(
-      (previous) => {
-        if (
-          type ===
-          "speakMinutes"
-        ) {
-          return {
-            ...previous,
-            speakMinutes:
-              Math.min(
-                10,
-                Math.max(
-                  1,
-                  previous.speakMinutes +
-                    direction
-                )
-              ),
-          };
-        }
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
 
-        if (
-          type ===
-          "researchMinutes"
-        ) {
-          return {
-            ...previous,
-            researchMinutes:
-              Math.min(
-                30,
-                Math.max(
-                  1,
-                  previous.researchMinutes +
-                    direction
-                )
-              ),
-          };
-        }
-
-        const currentIndex =
-          topics.indexOf(
-            previous.topic
-          );
-
-        const nextIndex =
-          (currentIndex +
-            direction +
-            topics.length) %
-          topics.length;
-
-        return {
-          ...previous,
-          topic:
-            topics[nextIndex],
-        };
-      }
+    return (
+      String(minutes).padStart(2, "0") +
+      ":" +
+      String(secs).padStart(2, "0")
     );
   };
 
-  /*
-   * Desktop mouse-wheel selector.
-   */
-  const handleSelectorWheel = (
-    event,
-    type
-  ) => {
-    event.preventDefault();
-
-    if (
-      Math.abs(
-        event.deltaY
-      ) < 2
-    ) {
-      return;
-    }
-
-    changeValue(
-      type,
-      event.deltaY > 0
-        ? -1
-        : 1
-    );
-  };
-
-  /*
-   * Mobile touch selector.
-   */
-  const handleSelectorPointerDown = (
-    event,
-    type
-  ) => {
-    if (
-      event.pointerType ===
-      "mouse"
-    ) {
-      return;
-    }
-
-    selectorPointerRef.current =
-      {
-        id: event.pointerId,
-        type,
-        lastY: event.clientY,
-        accumulated: 0,
-      };
-
-    event.currentTarget.setPointerCapture?.(
-      event.pointerId
-    );
-  };
-
-  const handleSelectorPointerMove = (
-    event,
-    type
-  ) => {
-    const pointer =
-      selectorPointerRef.current;
-
-    if (!pointer) return;
-
-    if (
-      pointer.id !==
-      event.pointerId
-    ) {
-      return;
-    }
-
-    const movement =
-      pointer.lastY -
-      event.clientY;
-
-    pointer.lastY =
-      event.clientY;
-
-    pointer.accumulated +=
-      movement;
-
-    const threshold = 18;
-
-    while (
-      Math.abs(
-        pointer.accumulated
-      ) >= threshold
-    ) {
-      const direction =
-        pointer.accumulated >
-        0
-          ? 1
-          : -1;
-
-      changeValue(
-        type,
-        direction
-      );
-
-      pointer.accumulated -=
-        direction *
-        threshold;
-    }
-
-    event.preventDefault();
-  };
-
-  const handleSelectorPointerUp = (
-    event
-  ) => {
-    const pointer =
-      selectorPointerRef.current;
-
-    if (
-      pointer &&
-      pointer.id ===
-        event.pointerId
-    ) {
-      selectorPointerRef.current =
-        null;
-    }
-  };
-
-  const selectorEvents = (
-    type
-  ) => ({
-    onWheel: (event) =>
-      handleSelectorWheel(
-        event,
-        type
-      ),
-
-    onPointerDown: (
-      event
-    ) =>
-      handleSelectorPointerDown(
-        event,
-        type
-      ),
-
-    onPointerMove: (
-      event
-    ) =>
-      handleSelectorPointerMove(
-        event,
-        type
-      ),
-
-    onPointerUp:
-      handleSelectorPointerUp,
-
-    onPointerCancel:
-      handleSelectorPointerUp,
-
-    style: {
-      touchAction: "none",
-      userSelect: "none",
-      WebkitUserSelect:
-        "none",
-    },
-  });
-
-  /*
-   * CLOSE button styling.
-   *
-   * Same dimensions as DONE/SPEAK,
-   * but intentionally not highlighted.
-   */
-  const secondaryButton =
-    "w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#303030] rounded-full bg-[#111] text-[#777] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all hover:text-white hover:border-[#555] hover:bg-[#181818]";
+  const circleLength = 2 * Math.PI * 126;
 
   return (
-    <div className="fixed inset-0 w-full h-full overflow-hidden bg-[#050505] text-[#f5f5f5] selection:bg-neutral-800">
+    <div className="w-full h-screen overflow-hidden flex flex-col bg-[#050505] text-[#f5f5f5] selection:bg-neutral-800">
 
       {/* HEADER */}
-
-      <header className="absolute top-0 left-0 right-0 h-[78px] px-[24px] sm:px-[34px] flex items-center justify-between z-[100]">
-
+      <header className="h-[78px] px-[20px] sm:px-[34px] flex items-center justify-between shrink-0">
         <div className="text-[18px] font-extrabold tracking-tight select-none">
-          OffScripted
-          <span className="text-[#5c5c5c] font-medium">
-            .
-          </span>
+          offScripted<span className="text-[#5c5c5c] font-medium">.</span>
         </div>
 
-        <button
-          onClick={() =>
-            setIsSettingsOpen(
-              true
-            )
-          }
-          className="w-[42px] h-[42px] border border-transparent rounded-full bg-transparent text-[#8b8b8b] grid place-items-center cursor-pointer transition-all hover:text-white hover:bg-[#111] hover:border-[#242424]"
-          aria-label="Open settings"
-        >
-          <svg
-            className="w-[19px] h-[19px]"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex items-center">
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-[42px] h-[42px] border border-transparent rounded-full bg-transparent text-[#8b8b8b] grid place-items-center cursor-pointer transition-all duration-250 hover:text-white hover:bg-[#111] hover:border-[#242424] active:scale-95"
+            aria-label="Open settings"
           >
-            <path d="M4 7h10" />
-            <path d="M18 7h2" />
-            <path d="M4 17h2" />
-            <path d="M10 17h10" />
-            <circle
-              cx="16"
-              cy="7"
-              r="2"
-            />
-            <circle
-              cx="8"
-              cy="17"
-              r="2"
-            />
-          </svg>
-        </button>
+            <svg
+              className="w-[19px] h-[19px]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 7h10" />
+              <path d="M18 7h2" />
+              <path d="M4 17h2" />
+              <path d="M10 17h10" />
+              <circle cx="16" cy="7" r="2" />
+              <circle cx="8" cy="17" r="2" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* MAIN */}
-
-      <main className="absolute inset-0 flex items-center justify-center px-[16px] sm:px-[24px] pt-[78px] pb-[58px] overflow-hidden">
+      <main className="flex-1 min-h-0 w-full flex items-center justify-center px-[14px] sm:px-[24px] pb-[20px] sm:pb-[35px] overflow-hidden">
 
         <div className="w-full max-w-[1100px] flex flex-col items-center justify-center text-center">
 
-          {/* TOPIC LABEL */}
+          {/* YOUR TOPIC / SELECTED TOPIC */}
+          {viewMode !== "activeTimer" && (
+            <div
+              className={`text-[#777] text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase mb-[22px] sm:mb-[30px] min-h-[12px] transition-opacity duration-300 ${
+                isSpinning ? "opacity-0" : "opacity-100"
+              }`}
+            >
+              {selectedTopic || "YOUR TOPIC"}
+            </div>
+          )}
 
-          {viewMode !==
-            "activeTimer" &&
-            viewMode !==
-              "spinning" &&
-            viewMode !==
-              "complete" && (
-              <div className="text-[#777] text-[10px] font-bold tracking-[0.22em] uppercase mb-[30px] min-h-[12px]">
-                {selectedTopic ||
-                  "YOUR TOPIC"}
+          {/* MAIN TEXT */}
+          {viewMode !== "activeTimer" && (
+            <div className="w-full min-h-[160px] sm:min-h-[190px] flex items-center justify-center overflow-hidden relative">
+
+              <div
+                className={`max-w-full px-[12px] sm:px-[20px] break-words ${
+                  viewMode === "idle"
+                    ? "text-[clamp(70px,12vw,150px)] font-black tracking-[-0.09em] text-[#777]"
+                    : viewMode === "spinning"
+                    ? "text-[clamp(38px,7vw,88px)] font-extrabold tracking-[-0.075em] text-[#d7d7d7]"
+                    : "text-[clamp(38px,7vw,88px)] font-extrabold tracking-[-0.075em] text-white animate-topic-reveal"
+                }`}
+              >
+                {currentText}
               </div>
-            )}
+            </div>
+          )}
 
-          {/* QUESTION */}
+          {/* BUTTONS */}
+          {viewMode !== "activeTimer" && !isSpinning && (
+            <div className="mt-[38px] sm:mt-[48px] flex flex-col items-center justify-center gap-[14px] w-full">
 
-          {viewMode !==
-            "activeTimer" &&
-            viewMode !==
-              "complete" && (
-              <div className="w-full min-h-[190px] flex items-center justify-center overflow-hidden relative">
+              <div className="flex items-center justify-center gap-[8px]">
 
-                <div
-                  className={`max-w-full px-[12px] sm:px-[20px] break-words ${
-                    viewMode ===
-                    "idle"
-                      ? "text-[#707070] text-[clamp(64px,9vw,118px)] font-mono font-black tracking-[-0.08em] leading-none"
-                      : viewMode ===
-                        "spinning"
-                      ? "text-[#d7d7d7] blur-[0.15px] text-[clamp(40px,7vw,94px)] font-extrabold tracking-[-0.075em]"
-                      : "text-[clamp(38px,6.5vw,88px)] font-extrabold tracking-[-0.075em] text-white animate-topic-reveal"
+                {/* SPIN
+                    - Always enabled whenever not currently spinning.
+                    - Highlighted BEFORE a new spin.
+                    - Non-highlighted AFTER a successful spin.
+                */}
+                <button
+                  onClick={spin}
+                  disabled={isSpinning}
+                  aria-label="Spin"
+                  className={`min-w-[118px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all duration-200 hover:translate-y-[-2px] active:translate-y-0 active:scale-95 ${
+                    selectedQuestion
+                      ? "border-[#333] bg-transparent text-[#777] hover:text-white hover:border-[#666]"
+                      : "border-white bg-white text-[#080808] hover:bg-[#d8d8d8]"
                   }`}
                 >
-                  {currentText}
-                </div>
+                  SPIN
+                </button>
+
+                {/* RESEARCH
+                    - Disabled + non-highlighted BEFORE spin.
+                    - Enabled + highlighted ONLY AFTER spin.
+                */}
+                <button
+                  onClick={startResearchTimer}
+                  disabled={!selectedQuestion || isSpinning}
+                  aria-label="Research"
+                  className={`min-w-[118px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.08em] transition-all duration-200 active:scale-95 ${
+                    selectedQuestion && !isSpinning
+                      ? "border-white bg-white text-[#080808] hover:bg-[#d8d8d8] hover:translate-y-[-1px] cursor-pointer"
+                      : "border-[#242424] bg-[#111] text-[#8b8b8b] opacity-25 cursor-not-allowed pointer-events-none"
+                  }`}
+                >
+                  RESEARCH
+                </button>
 
               </div>
-            )}
-
-          {/* ACTION BUTTONS */}
-
-          {viewMode !==
-            "activeTimer" &&
-            viewMode !==
-              "spinning" &&
-            viewMode !==
-              "complete" && (
-              <div className="mt-[42px] sm:mt-[48px] flex flex-col items-center justify-center gap-[14px] w-full">
-
-                <div className="flex items-center justify-center gap-[6px] sm:gap-[8px]">
-
-                  <button
-                    onClick={spin}
-                    disabled={
-                      isSpinning
-                    }
-                    className={`min-w-[125px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all hover:translate-y-[-2px] hover:bg-[#d8d8d8] active:translate-y-0 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed ${
-                      selectedTopic
-                        ? "opacity-35 border-[#555] bg-[#161616] text-[#777]"
-                        : ""
-                    }`}
-                  >
-                    SPIN
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      startTimer(
-                        "research"
-                      )
-                    }
-                    disabled={
-                      !selectedQuestion
-                    }
-                    className={`w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.08em] cursor-pointer transition-all ${
-                      selectedQuestion
-                        ? "border-white bg-white text-[#080808] hover:bg-[#d8d8d8] hover:translate-y-[-1px]"
-                        : "border-[#242424] bg-[#111] text-[#8b8b8b] opacity-25 cursor-pointer pointer-events-none"
-                    }`}
-                  >
-                    RESEARCH
-                  </button>
-
-                </div>
-
-              </div>
-            )}
+            </div>
+          )}
 
           {/* TIMER */}
-
-          {viewMode ===
-            "activeTimer" && (
+          {viewMode === "activeTimer" && (
             <div className="flex flex-col items-center justify-center w-full">
 
-              <div className="max-w-[900px] text-[clamp(14px,2.2vw,22px)] font-bold text-white text-center mb-[30px]">
-                {selectedQuestion ||
-                  selectedTopic}
+              {/* CONTENT ABOVE CIRCLE */}
+              <div className="flex flex-col items-center justify-center min-h-[80px] mb-[24px] sm:mb-[35px]">
+
+                <div className="max-w-[900px] px-[15px] text-[clamp(14px,2.2vw,22px)] font-bold text-white text-center">
+                  {selectedQuestion || selectedTopic}
+                </div>
+
+                {timerState === "research" && (
+                  <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
+                    RESEARCHING
+                  </div>
+                )}
+
+                {timerState === "speak" && recordingMode === "audio" && (
+                  <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
+                    {isRecording ? "RECORDING" : "AUDIO"}
+                  </div>
+                )}
+
+                {timerState === "speak" && recordingMode === "video" && (
+                  <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
+                    {isRecording ? "RECORDING" : "VIDEO"}
+                  </div>
+                )}
               </div>
 
-              {timerState ===
-                "research" && (
-                <div className="text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center mb-[24px]">
-                  RESEARCHING
-                </div>
-              )}
+              {/* COUNTDOWN CIRCLE */}
+              <div className="relative w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] rounded-full flex flex-col items-center justify-center shrink-0">
 
-              {timerState ===
-                "speak" && (
-                <div className="text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center mb-[24px]">
-                  SPEAKING
-                </div>
-              )}
-
-              <div className="h-[22px]" />
-
-              <div className="relative w-[230px] h-[230px] sm:w-[260px] sm:h-[260px] rounded-full flex flex-col items-center justify-center">
-
-                <svg className="absolute top-0 left-0 w-full h-full -rotate-90 overflow-visible">
-
+                <svg
+                  className="absolute top-0 left-0 w-full h-full -rotate-90 overflow-visible"
+                  viewBox="0 0 260 260"
+                >
                   <circle
                     className="fill-none stroke-[#303030]"
-                    cx="50%"
-                    cy="50%"
-                    r="calc(50% - 4px)"
+                    cx="130"
+                    cy="130"
+                    r="126"
                     strokeWidth="6"
                     strokeLinecap="round"
                   />
 
                   <circle
                     className="fill-none stroke-white transition-all duration-1000 linear"
-                    cx="50%"
-                    cy="50%"
-                    r="calc(50% - 4px)"
+                    cx="130"
+                    cy="130"
+                    r="126"
                     strokeWidth="6"
                     strokeLinecap="round"
                     style={{
-                      strokeDasharray:
-                        2 *
-                        Math.PI *
-                        126,
-
+                      strokeDasharray: circleLength,
                       strokeDashoffset:
-                        2 *
-                        Math.PI *
-                        126 *
-                        (1 -
-                          remainingSeconds /
-                            timerDuration),
+                        circleLength *
+                        (1 - remainingSeconds / timerDuration),
                     }}
                   />
-
                 </svg>
 
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[48px] sm:text-[56px] font-extrabold tracking-[-0.05em] leading-none tabular-nums z-10">
-                  {formatTime(
-                    remainingSeconds
-                  )}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[48px] sm:text-[56px] font-extrabold tracking-[-0.05em] leading-none tabular-nums m-0 text-center z-10">
+                  {formatTime(remainingSeconds)}
                 </div>
-
               </div>
 
-              <div className="h-[36px]" />
+              {/* CONTENT BELOW CIRCLE */}
+              <div className="mt-[28px] sm:mt-[38px] min-h-[70px] flex items-center justify-center">
 
-              <div className="flex items-center justify-center gap-[8px] sm:gap-[12px]">
+                {/* RESEARCH DONE */}
+                {timerState === "research" && (
+                  <div className="flex items-center justify-center gap-[12px]">
+                    <button
+                      onClick={handleDoneResearch}
+                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
+                    >
+                      DONE
+                    </button>
 
-                {timerState ===
-                  "research" && (
-                  <button
-                    onClick={
-                      finishResearch
-                    }
-                    className="w-[125px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
-                  >
-                    DONE
-                  </button>
+                    <button
+                      onClick={closeTimer}
+                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
+                    >
+                      CLOSE
+                    </button>
+                  </div>
                 )}
 
-                {timerState ===
-                  "speakReady" && (
-                  <button
-                    onClick={() =>
-                      startTimer(
-                        "speak"
-                      )
-                    }
-                    className="min-w-[125px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[11px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
-                  >
-                    SPEAK
-                  </button>
+                {/* SPEAK BUTTON */}
+                {timerState === "speakReady" && (
+                  <div className="flex items-center justify-center gap-[12px]">
+                    <button
+                      onClick={handleSpeakButton}
+                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
+                    >
+                      SPEAK
+                    </button>
+
+                    <button
+                      onClick={closeTimer}
+                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
+                    >
+                      CLOSE
+                    </button>
+                  </div>
                 )}
 
-                <button
-                  onClick={
-                    resetToMain
-                  }
-                  className={
-                    secondaryButton
-                  }
-                >
-                  CLOSE
-                </button>
+                {/* SPEAKING TIMER */}
+                {timerState === "speak" && (
+                  <div className="flex items-center justify-center gap-[12px]">
+
+                    <button
+                      onClick={() => {
+                        if (
+                          recordingMode === "audio" ||
+                          recordingMode === "video"
+                        ) {
+                          stopMediaRecording();
+                        }
+
+                        setTimerState(null);
+                        setIsComplete(true);
+                        setViewMode("idle");
+                      }}
+                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
+                    >
+                      DONE
+                    </button>
+
+                    <button
+                      onClick={closeTimer}
+                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
+                    >
+                      CLOSE
+                    </button>
+
+                  </div>
+                )}
 
               </div>
-
             </div>
           )}
-
-          {/* COMPLETE */}
-
-          {viewMode ===
-            "complete" && (
-            <div className="flex flex-col items-center justify-center text-center w-full">
-
-              <div className="text-[#8b8b8b] text-[10px] font-bold tracking-[0.2em] uppercase mb-[25px]">
-                Session complete
-              </div>
-
-              <div className="max-w-[900px] text-[clamp(40px,6.5vw,82px)] leading-[0.95] font-extrabold tracking-[-0.07em]">
-                {selectedTopic}
-              </div>
-
-              <div className="text-[#8b8b8b] mt-[20px] text-[13px]">
-                Ready for another
-                topic?
-              </div>
-
-              <button
-                onClick={
-                  spinAgain
-                }
-                className="mt-[40px] h-[46px] sm:h-[48px] px-[22px] sm:px-[25px] border border-white rounded-full bg-white text-[#050505] text-[10px] sm:text-[11px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8]"
-              >
-                SPIN AGAIN
-              </button>
-
-            </div>
-          )}
-
         </div>
-
       </main>
 
       {/* FOOTER */}
-
-      <footer className="absolute bottom-0 left-0 right-0 h-[58px] flex items-center justify-center text-[#777] text-[10px] tracking-[0.04em] z-[100]">
+      <footer className="h-[58px] shrink-0 flex items-center justify-center text-[#777] text-[10px] tracking-[0.04em]">
 
         <a
           className="inline-flex items-center gap-[6px] text-[#bdbdbd] no-underline font-bold transition-colors hover:text-white"
@@ -1357,8 +932,7 @@ export default function App() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          made by
-          @__gautam17
+          made by @__gautam17
 
           <svg
             className="w-[14px] h-[14px]"
@@ -1369,36 +943,29 @@ export default function App() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <rect
-              x="3"
-              y="3"
-              width="18"
-              height="18"
-              rx="5"
-            />
-
-            <circle
-              cx="12"
-              cy="12"
-              r="4"
-            />
-
-            <circle
-              cx="17.5"
-              cy="6.5"
-              r="1"
-            />
+            <rect x="3" y="3" width="18" height="18" rx="5" />
+            <circle cx="12" cy="12" r="4" />
+            <circle cx="17.5" cy="6.5" r="1" />
           </svg>
         </a>
 
       </footer>
 
-      {/* SETTINGS MODAL */}
-
+      {/* SETTINGS */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[16px] sm:p-[20px] overflow-hidden">
+        <div
+          className="fixed inset-0 z-[200] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[20px] animate-[modalFadeIn_180ms_ease-out]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Settings"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsSettingsOpen(false);
+            }
+          }}
+        >
 
-          <div className="w-full max-w-[430px] max-h-[calc(100vh-32px)] bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[20px] sm:p-[23px] overflow-hidden">
+          <div className="w-full max-w-[430px] max-h-[90vh] overflow-hidden bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[23px] animate-[modalScaleIn_180ms_ease-out]">
 
             <div className="flex justify-between items-center mb-[27px]">
 
@@ -1407,39 +974,71 @@ export default function App() {
               </div>
 
               <button
-                onClick={() =>
-                  setIsSettingsOpen(
-                    false
-                  )
-                }
-                className="w-[32px] h-[32px] border border-[#242424] rounded-full bg-transparent text-[#8b8b8b] cursor-pointer text-[18px] leading-none hover:text-white hover:bg-[#181818]"
+                onClick={() => setIsSettingsOpen(false)}
+                aria-label="Close settings"
+                className="w-[32px] h-[32px] border border-[#242424] rounded-full bg-transparent text-[#8b8b8b] cursor-pointer text-[18px] leading-none hover:text-white hover:bg-[#181818] active:scale-95 transition-transform duration-150"
               >
                 ×
               </button>
 
             </div>
 
-            <div className="grid grid-cols-2 gap-[8px] sm:gap-[10px]">
+            <div className="grid grid-cols-2 gap-[10px]">
 
               {/* SPEECH */}
-
-              <div className="text-center p-[4px_4px_8px] sm:p-[4px_8px_8px]">
+              <div className="text-center p-[4px_8px_8px]">
 
                 <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[25px]">
                   SPEECH
                 </div>
 
                 <div
-                  {...selectorEvents(
-                    "speakMinutes"
-                  )}
-                  className="h-[96px] flex items-center justify-center gap-[6px] select-none relative cursor-ns-resize"
+                  className="h-[96px] flex items-center justify-center gap-[6px] select-none relative"
+                  onWheel={(event) => {
+                    event.preventDefault();
+
+                    setSettings((s) => ({
+                      ...s,
+                      speakMinutes: Math.max(
+                        1,
+                        Math.min(
+                          10,
+                          s.speakMinutes + (event.deltaY < 0 ? 1 : -1)
+                        )
+                      ),
+                    }));
+                  }}
+                  onTouchStart={(event) => {
+                    event.currentTarget.dataset.startY =
+                      event.touches[0].clientY;
+                  }}
+                  onTouchMove={(event) => {
+                    const startY = Number(
+                      event.currentTarget.dataset.startY
+                    );
+
+                    const currentY = event.touches[0].clientY;
+                    const diff = startY - currentY;
+
+                    if (Math.abs(diff) > 25) {
+                      setSettings((s) => ({
+                        ...s,
+                        speakMinutes: Math.max(
+                          1,
+                          Math.min(
+                            10,
+                            s.speakMinutes + (diff > 0 ? 1 : -1)
+                          )
+                        ),
+                      }));
+
+                      event.currentTarget.dataset.startY = currentY;
+                    }
+                  }}
                 >
 
-                  <div className="w-[58px] sm:w-[66px] text-right text-[36px] sm:text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
-                    {
-                      settings.speakMinutes
-                    }
+                  <div className="w-[66px] text-right text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
+                    {settings.speakMinutes}
                   </div>
 
                   <div className="text-[#5c5c5c] text-[11px] font-bold self-center">
@@ -1450,24 +1049,32 @@ export default function App() {
 
                     <button
                       onClick={() =>
-                        changeValue(
-                          "speakMinutes",
-                          1
-                        )
+                        setSettings((s) => ({
+                          ...s,
+                          speakMinutes: Math.min(
+                            10,
+                            s.speakMinutes + 1
+                          ),
+                        }))
                       }
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white"
+                      aria-label="Increase speaking time"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white active:scale-90 transition-transform"
                     >
                       ▲
                     </button>
 
                     <button
                       onClick={() =>
-                        changeValue(
-                          "speakMinutes",
-                          -1
-                        )
+                        setSettings((s) => ({
+                          ...s,
+                          speakMinutes: Math.max(
+                            1,
+                            s.speakMinutes - 1
+                          ),
+                        }))
                       }
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white"
+                      aria-label="Decrease speaking time"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white active:scale-90 transition-transform"
                     >
                       ▼
                     </button>
@@ -1475,28 +1082,63 @@ export default function App() {
                   </div>
 
                 </div>
-
               </div>
 
               {/* RESEARCH */}
-
-              <div className="text-center p-[4px_4px_8px] sm:p-[4px_8px_8px]">
+              <div className="text-center p-[4px_8px_8px]">
 
                 <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[25px]">
                   RESEARCH
                 </div>
 
                 <div
-                  {...selectorEvents(
-                    "researchMinutes"
-                  )}
-                  className="h-[96px] flex items-center justify-center gap-[6px] select-none relative cursor-ns-resize"
+                  className="h-[96px] flex items-center justify-center gap-[6px] select-none relative"
+                  onWheel={(event) => {
+                    event.preventDefault();
+
+                    setSettings((s) => ({
+                      ...s,
+                      researchMinutes: Math.max(
+                        1,
+                        Math.min(
+                          30,
+                          s.researchMinutes +
+                            (event.deltaY < 0 ? 1 : -1)
+                        ),
+                      ),
+                    }));
+                  }}
+                  onTouchStart={(event) => {
+                    event.currentTarget.dataset.startY =
+                      event.touches[0].clientY;
+                  }}
+                  onTouchMove={(event) => {
+                    const startY = Number(
+                      event.currentTarget.dataset.startY
+                    );
+
+                    const currentY = event.touches[0].clientY;
+                    const diff = startY - currentY;
+
+                    if (Math.abs(diff) > 25) {
+                      setSettings((s) => ({
+                        ...s,
+                        researchMinutes: Math.max(
+                          1,
+                          Math.min(
+                            30,
+                            s.researchMinutes + (diff > 0 ? 1 : -1)
+                          )
+                        ),
+                      }));
+
+                      event.currentTarget.dataset.startY = currentY;
+                    }
+                  }}
                 >
 
-                  <div className="w-[58px] sm:w-[66px] text-right text-[36px] sm:text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
-                    {
-                      settings.researchMinutes
-                    }
+                  <div className="w-[66px] text-right text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
+                    {settings.researchMinutes}
                   </div>
 
                   <div className="text-[#5c5c5c] text-[11px] font-bold self-center">
@@ -1507,24 +1149,32 @@ export default function App() {
 
                     <button
                       onClick={() =>
-                        changeValue(
-                          "researchMinutes",
-                          1
-                        )
+                        setSettings((s) => ({
+                          ...s,
+                          researchMinutes: Math.min(
+                            30,
+                            s.researchMinutes + 1
+                          ),
+                        }))
                       }
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white"
+                      aria-label="Increase research time"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white active:scale-90 transition-transform"
                     >
                       ▲
                     </button>
 
                     <button
                       onClick={() =>
-                        changeValue(
-                          "researchMinutes",
-                          -1
-                        )
+                        setSettings((s) => ({
+                          ...s,
+                          researchMinutes: Math.max(
+                            1,
+                            s.researchMinutes - 1
+                          ),
+                        }))
                       }
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white"
+                      aria-label="Decrease research time"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white active:scale-90 transition-transform"
                     >
                       ▼
                     </button>
@@ -1532,13 +1182,11 @@ export default function App() {
                   </div>
 
                 </div>
-
               </div>
 
             </div>
 
             {/* SOUND */}
-
             <div className="mt-[22px] flex items-center justify-between px-[3px]">
 
               <span className="text-[#8b8b8b] text-[11px] font-bold tracking-[0.08em] uppercase">
@@ -1547,15 +1195,13 @@ export default function App() {
 
               <button
                 onClick={() =>
-                  setSettings(
-                    (s) => ({
-                      ...s,
-                      muted:
-                        !s.muted,
-                    })
-                  )
+                  setSettings((s) => ({
+                    ...s,
+                    muted: !s.muted,
+                  }))
                 }
-                className={`w-[46px] h-[25px] p-[2px] border rounded-full cursor-pointer relative transition-all ${
+                aria-label={settings.muted ? "Enable sound" : "Mute sound"}
+                className={`w-[46px] h-[25px] p-[2px] border rounded-full cursor-pointer relative transition-all active:scale-95 ${
                   !settings.muted
                     ? "bg-white border-white"
                     : "bg-[#151515] border-[#333]"
@@ -1574,8 +1220,43 @@ export default function App() {
 
             </div>
 
-            {/* TOPIC */}
+            {/* SPEAKING MODE */}
+            <div className="mt-[22px]">
 
+              <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[14px] text-center">
+                SPEAKING MODE
+              </div>
+
+              <div className="grid grid-cols-3 gap-[7px]">
+
+                {[
+                  ["normal", "NORMAL"],
+                  ["audio", "AUDIO"],
+                  ["video", "VIDEO"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() =>
+                      setSettings((s) => ({
+                        ...s,
+                        speakingMode: value,
+                      }))
+                    }
+                    className={`h-[42px] rounded-full border text-[9px] font-extrabold tracking-[0.08em] cursor-pointer transition-all active:scale-95 ${
+                      settings.speakingMode === value
+                        ? "border-white bg-white text-[#080808]"
+                        : "border-[#333] bg-transparent text-[#777] hover:text-white hover:border-[#666]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+
+              </div>
+
+            </div>
+
+            {/* TOPIC */}
             <div className="mt-[22px] text-center">
 
               <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[25px]">
@@ -1583,38 +1264,103 @@ export default function App() {
               </div>
 
               <div
-                {...selectorEvents(
-                  "topic"
-                )}
-                className="h-[96px] flex items-center justify-center gap-[6px] select-none relative cursor-ns-resize"
+                className="h-[96px] flex items-center justify-center gap-[6px] select-none relative"
+                onWheel={(event) => {
+                  event.preventDefault();
+
+                  const currentIndex = topics.indexOf(
+                    settings.topic
+                  );
+
+                  const nextIndex =
+                    event.deltaY < 0
+                      ? (currentIndex + 1) % topics.length
+                      : (currentIndex - 1 + topics.length) %
+                        topics.length;
+
+                  setSettings((s) => ({
+                    ...s,
+                    topic: topics[nextIndex],
+                  }));
+                }}
+                onTouchStart={(event) => {
+                  event.currentTarget.dataset.startY =
+                    event.touches[0].clientY;
+                }}
+                onTouchMove={(event) => {
+                  const startY = Number(
+                    event.currentTarget.dataset.startY
+                  );
+
+                  const currentY = event.touches[0].clientY;
+                  const diff = startY - currentY;
+
+                  if (Math.abs(diff) > 25) {
+                    const currentIndex = topics.indexOf(
+                      settings.topic
+                    );
+
+                    const nextIndex =
+                      diff > 0
+                        ? (currentIndex + 1) % topics.length
+                        : (currentIndex - 1 + topics.length) %
+                          topics.length;
+
+                    setSettings((s) => ({
+                      ...s,
+                      topic: topics[nextIndex],
+                    }));
+
+                    event.currentTarget.dataset.startY = currentY;
+                  }
+                }}
               >
 
-                <div className="min-w-[140px] sm:min-w-[150px] max-w-[210px] sm:max-w-[230px] text-center text-[28px] sm:text-[32px] leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-hidden text-ellipsis">
+                <div className="min-w-[150px] max-w-[230px] text-center text-[32px] leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-hidden text-ellipsis">
                   {settings.topic}
                 </div>
 
                 <div className="absolute left-1/2 -top-[6px] -translate-x-1/2 w-[180px] h-[108px] pointer-events-none">
 
                   <button
-                    onClick={() =>
-                      changeValue(
-                        "topic",
-                        1
-                      )
-                    }
-                    className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white"
+                    onClick={() => {
+                      const index = topics.indexOf(
+                        settings.topic
+                      );
+
+                      const next =
+                        topics[(index + 1) % topics.length];
+
+                      setSettings((s) => ({
+                        ...s,
+                        topic: next,
+                      }));
+                    }}
+                    aria-label="Next topic"
+                    className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white active:scale-90 transition-transform"
                   >
                     ▲
                   </button>
 
                   <button
-                    onClick={() =>
-                      changeValue(
-                        "topic",
-                        -1
-                      )
-                    }
-                    className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white"
+                    onClick={() => {
+                      const index = topics.indexOf(
+                        settings.topic
+                      );
+
+                      const previous =
+                        topics[
+                          (index - 1 + topics.length) %
+                            topics.length
+                        ];
+
+                      setSettings((s) => ({
+                        ...s,
+                        topic: previous,
+                      }));
+                    }}
+                    aria-label="Previous topic"
+                    className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white active:scale-90 transition-transform"
                   >
                     ▼
                   </button>
@@ -1622,18 +1368,13 @@ export default function App() {
                 </div>
 
               </div>
-
             </div>
 
             <div className="flex justify-end mt-[27px]">
 
               <button
-                onClick={() =>
-                  setIsSettingsOpen(
-                    false
-                  )
-                }
-                className="h-[38px] sm:h-[40px] px-[15px] sm:px-[17px] border-none rounded-[9px] bg-white text-[#080808] text-[9px] sm:text-[10px] font-extrabold tracking-[0.08em] cursor-pointer hover:bg-[#d8d8d8]"
+                onClick={() => setIsSettingsOpen(false)}
+                className="h-[40px] px-[17px] border-none rounded-[9px] bg-white text-[#080808] text-[10px] font-extrabold tracking-[0.08em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
               >
                 SAVE CHANGES
               </button>
@@ -1641,9 +1382,89 @@ export default function App() {
             </div>
 
           </div>
-
         </div>
       )}
+
+      {/* SESSION COMPLETE */}
+      {isComplete && (
+        <div
+          className="fixed inset-0 z-[150] bg-[rgba(5,5,5,0.97)] flex items-center justify-center text-center p-[20px] sm:p-[30px] animate-[modalFadeIn_180ms_ease-out]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Session complete"
+        >
+
+          <div className="flex flex-col items-center max-w-full animate-[modalScaleIn_180ms_ease-out]">
+
+            <div className="text-[#8b8b8b] text-[10px] font-bold tracking-[0.2em] uppercase mb-[25px]">
+              Session complete
+            </div>
+
+            {/* AUDIO RECORDING PLAYBACK */}
+            {recordingMode === "audio" && recordingUrl && (
+              <div className="mt-[5px] flex items-center justify-center">
+
+                <audio
+                  src={recordingUrl}
+                  controls
+                  className="h-[40px] max-w-[280px]"
+                />
+
+              </div>
+            )}
+
+            {/* VIDEO RECORDING PLAYBACK */}
+            {recordingMode === "video" && recordingUrl && (
+              <div className="mt-[5px] flex items-center justify-center">
+
+                <video
+                  ref={videoRef}
+                  src={recordingUrl}
+                  controls
+                  playsInline
+                  className="w-[min(520px,80vw)] max-h-[55vh] rounded-[12px] border border-[#242424] object-contain"
+                />
+
+              </div>
+            )}
+
+            {/* NORMAL MODE: NO MESSAGE */}
+
+            {/* CLOSE — NON-HIGHLIGHTED */}
+            <button
+              onClick={closeCompletedSession}
+              aria-label="Close session"
+              className="mt-[40px] h-[48px] min-w-[130px] px-[25px] border border-[#333] rounded-full bg-transparent text-[#777] text-[11px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-all duration-150"
+            >
+              CLOSE
+            </button>
+
+          </div>
+        </div>
+      )}
+
+      {/* ANIMATION STYLES */}
+      <style>{`
+        @keyframes modalFadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes modalScaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+      `}</style>
 
     </div>
   );
