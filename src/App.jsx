@@ -137,8 +137,6 @@ export default function App() {
           researchMinutes: parsed.researchMinutes ?? 10,
           muted: parsed.muted ?? false,
           topic: parsed.topic ?? "Python",
-
-          // NORMAL is always the fallback/default mode.
           speakingMode: parsed.speakingMode ?? "normal",
         };
       } catch {
@@ -176,6 +174,12 @@ export default function App() {
   const [recordingBlob, setRecordingBlob] = useState(null);
 
   const audioCtxRef = useRef(null);
+
+  // NEW:
+  // Dedicated master audio chain for mobile loudness consistency.
+  const audioMasterRef = useRef(null);
+  const audioCompressorRef = useRef(null);
+
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const videoRef = useRef(null);
@@ -192,15 +196,6 @@ export default function App() {
 
   /*
     COMPLETE PAGE SCROLL LOCK
-
-    The application itself is fixed to the viewport and:
-    - html cannot scroll
-    - body cannot scroll
-    - #root cannot scroll
-    - overscroll is disabled
-    - touch scrolling of the page is disabled
-
-    Works across mobile, tablet, laptop and desktop.
   */
   useEffect(() => {
     const html = document.documentElement;
@@ -246,6 +241,10 @@ export default function App() {
         mediaStreamRef.current
           .getTracks()
           .forEach((track) => track.stop());
+      }
+
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {});
       }
     };
   }, [recordingUrl]);
@@ -302,93 +301,207 @@ export default function App() {
     };
   }, [isSettingsOpen, isComplete]);
 
+  /*
+    MOBILE AUDIO INITIALIZATION
+
+    The important change is the audio output chain:
+
+    Oscillator
+       ↓
+    Individual Gain
+       ↓
+    Compressor
+       ↓
+    Master Gain
+       ↓
+    Device speakers
+
+    This allows the sound to be considerably louder while
+    keeping the peaks controlled.
+  */
   const initAudio = () => {
     if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext ||
-        window.webkitAudioContext)();
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContextClass) {
+        return;
+      }
+
+      const ctx = new AudioContextClass();
+
+      audioCtxRef.current = ctx;
+
+      /*
+        Compressor prevents the louder signal from becoming
+        excessively harsh or clipping on mobile speakers.
+      */
+      const compressor = ctx.createDynamicsCompressor();
+
+      compressor.threshold.setValueAtTime(-20, ctx.currentTime);
+      compressor.knee.setValueAtTime(18, ctx.currentTime);
+      compressor.ratio.setValueAtTime(4, ctx.currentTime);
+      compressor.attack.setValueAtTime(0.008, ctx.currentTime);
+      compressor.release.setValueAtTime(0.18, ctx.currentTime);
+
+      /*
+        Master gain provides the additional loudness.
+      */
+      const masterGain = ctx.createGain();
+
+      masterGain.gain.setValueAtTime(1.65, ctx.currentTime);
+
+      compressor.connect(masterGain);
+      masterGain.connect(ctx.destination);
+
+      audioCompressorRef.current = compressor;
+      audioMasterRef.current = masterGain;
     }
 
     if (audioCtxRef.current.state === "suspended") {
-      audioCtxRef.current.resume();
+      audioCtxRef.current.resume().catch(() => {});
+    }
+
+    /*
+      Some mobile browsers need the resume to happen immediately
+      after the user's interaction.
+    */
+    if (
+      audioCtxRef.current.state === "interrupted" &&
+      typeof audioCtxRef.current.resume === "function"
+    ) {
+      audioCtxRef.current.resume().catch(() => {});
     }
   };
 
+  /*
+    LOUDER SPINNING SOUND
+
+    Increased from the previous very-low 0.018 peak.
+
+    The attack remains smooth so the sound does not suddenly
+    jump loudly.
+  */
   const playTick = (intensity = 1) => {
-    if (settings.muted || !audioCtxRef.current) return;
+    if (settings.muted) return;
 
-    const now = audioCtxRef.current.currentTime;
+    initAudio();
 
-    const oscillator = audioCtxRef.current.createOscillator();
-    const gain = audioCtxRef.current.createGain();
+    const ctx = audioCtxRef.current;
+    const master = audioMasterRef.current;
+
+    if (!ctx || !master) return;
+
+    const now = ctx.currentTime;
+
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
 
     oscillator.type = "sine";
 
-    oscillator.frequency.setValueAtTime(520, now);
+    oscillator.frequency.setValueAtTime(560, now);
+
     oscillator.frequency.exponentialRampToValueAtTime(
-      180,
-      now + 0.065
+      185,
+      now + 0.085
+    );
+
+    /*
+      Much louder than the original.
+
+      Still uses a smooth exponential attack.
+    */
+    const peak = Math.max(
+      0.0001,
+      0.075 * intensity
     );
 
     gain.gain.setValueAtTime(0.0001, now);
+
     gain.gain.exponentialRampToValueAtTime(
-      Math.max(0.0001, 0.018 * intensity),
-      now + 0.012
+      peak,
+      now + 0.022
     );
+
     gain.gain.exponentialRampToValueAtTime(
       0.0001,
-      now + 0.075
+      now + 0.105
     );
 
     oscillator.connect(gain);
-    gain.connect(audioCtxRef.current.destination);
+    gain.connect(master);
 
     oscillator.start(now);
-    oscillator.stop(now + 0.08);
+    oscillator.stop(now + 0.11);
   };
 
+  /*
+    LOUDER COMPLETION SOUND
+
+    Smooth attack + controlled release.
+  */
   const playCompletionSound = () => {
     if (settings.muted) return;
 
     initAudio();
 
-    if (!audioCtxRef.current) return;
+    const ctx = audioCtxRef.current;
+    const master = audioMasterRef.current;
 
-    const now = audioCtxRef.current.currentTime;
+    if (!ctx || !master) return;
 
-    const oscillator = audioCtxRef.current.createOscillator();
-    const gain = audioCtxRef.current.createGain();
+    const now = ctx.currentTime;
+
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
 
     oscillator.type = "sine";
 
-    oscillator.frequency.setValueAtTime(420, now);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      620,
-      now + 0.16
-    );
-    oscillator.frequency.exponentialRampToValueAtTime(
-      760,
-      now + 0.34
+    oscillator.frequency.setValueAtTime(
+      420,
+      now
     );
 
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(
-      0.045,
-      now + 0.035
-    );
-    gain.gain.exponentialRampToValueAtTime(
-      0.025,
+    oscillator.frequency.exponentialRampToValueAtTime(
+      620,
       now + 0.18
     );
+
+    oscillator.frequency.exponentialRampToValueAtTime(
+      760,
+      now + 0.38
+    );
+
+    /*
+      Increased considerably from the original 0.045.
+
+      The attack is still gradual.
+    */
+    gain.gain.setValueAtTime(
+      0.0001,
+      now
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.13,
+      now + 0.055
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.075,
+      now + 0.20
+    );
+
     gain.gain.exponentialRampToValueAtTime(
       0.0001,
-      now + 0.42
+      now + 0.52
     );
 
     oscillator.connect(gain);
-    gain.connect(audioCtxRef.current.destination);
+    gain.connect(master);
 
     oscillator.start(now);
-    oscillator.stop(now + 0.44);
+    oscillator.stop(now + 0.55);
   };
 
   const getRandomQuestion = (topic) => {
@@ -426,19 +539,25 @@ export default function App() {
   const spin = async () => {
     if (isSpinning) return;
 
+    /*
+      Initialize audio directly from the user's button interaction.
+      This is important for mobile autoplay policies.
+    */
+    initAudio();
+
     setIsComplete(false);
     setIsSpinning(true);
 
     setSelectedQuestion(null);
     setCurrentText("READY?");
 
-    initAudio();
     setViewMode("spinning");
 
     const finalTopic = settings.topic;
     const finalQuestion = getRandomQuestion(finalTopic);
 
-    const totalTicks = 28 + Math.floor(Math.random() * 12);
+    const totalTicks =
+      28 + Math.floor(Math.random() * 12);
 
     for (let i = 0; i < totalTicks; i++) {
       let currentQuestion;
@@ -447,13 +566,20 @@ export default function App() {
         currentQuestion = finalQuestion;
       } else {
         const randomTopic =
-          topics[Math.floor(Math.random() * topics.length)];
+          topics[
+            Math.floor(
+              Math.random() * topics.length
+            )
+          ];
 
-        const randomQuestions = questionBanks[randomTopic] || [];
+        const randomQuestions =
+          questionBanks[randomTopic] || [];
 
         currentQuestion =
           randomQuestions[
-            Math.floor(Math.random() * randomQuestions.length)
+            Math.floor(
+              Math.random() * randomQuestions.length
+            )
           ];
       }
 
@@ -482,7 +608,10 @@ export default function App() {
   useEffect(() => {
     let interval = null;
 
-    if (timerState === "research" || timerState === "speak") {
+    if (
+      timerState === "research" ||
+      timerState === "speak"
+    ) {
       interval = setInterval(() => {
         setRemainingSeconds((previous) => {
           if (previous <= 1) {
@@ -520,7 +649,14 @@ export default function App() {
   const startResearchTimer = () => {
     if (!selectedQuestion) return;
 
-    const duration = settings.researchMinutes * 60;
+    /*
+      Initialize audio in case the research timer is started
+      directly from a user interaction.
+    */
+    initAudio();
+
+    const duration =
+      settings.researchMinutes * 60;
 
     setTimerDuration(duration);
     setRemainingSeconds(duration);
@@ -534,17 +670,24 @@ export default function App() {
   };
 
   const handleSpeakButton = async () => {
+    initAudio();
+
     if (settings.speakingMode === "normal") {
       startNormalSpeaking();
-    } else if (settings.speakingMode === "audio") {
+    } else if (
+      settings.speakingMode === "audio"
+    ) {
       await startAudioSpeaking();
-    } else if (settings.speakingMode === "video") {
+    } else if (
+      settings.speakingMode === "video"
+    ) {
       await startVideoSpeaking();
     }
   };
 
   const startNormalSpeaking = () => {
-    const duration = settings.speakMinutes * 60;
+    const duration =
+      settings.speakMinutes * 60;
 
     setRecordingMode("normal");
     setTimerDuration(duration);
@@ -564,7 +707,8 @@ export default function App() {
           "video/webm;codecs=vp9,opus"
         )
       ) {
-        options.mimeType = "video/webm;codecs=vp9,opus";
+        options.mimeType =
+          "video/webm;codecs=vp9,opus";
       } else if (
         MediaRecorder.isTypeSupported("video/webm")
       ) {
@@ -576,7 +720,8 @@ export default function App() {
           "audio/webm;codecs=opus"
         )
       ) {
-        options.mimeType = "audio/webm;codecs=opus";
+        options.mimeType =
+          "audio/webm;codecs=opus";
       } else if (
         MediaRecorder.isTypeSupported("audio/webm")
       ) {
@@ -584,13 +729,16 @@ export default function App() {
       }
     }
 
-    const recorder = new MediaRecorder(stream, options);
+    const recorder =
+      new MediaRecorder(stream, options);
 
     mediaRecorderRef.current = recorder;
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
-        audioChunksRef.current.push(event.data);
+        audioChunksRef.current.push(
+          event.data
+        );
       }
     };
 
@@ -601,11 +749,15 @@ export default function App() {
           ? "video/webm"
           : "audio/webm");
 
-      const blob = new Blob(audioChunksRef.current, {
-        type: mimeType,
-      });
+      const blob = new Blob(
+        audioChunksRef.current,
+        {
+          type: mimeType,
+        }
+      );
 
-      const url = URL.createObjectURL(blob);
+      const url =
+        URL.createObjectURL(blob);
 
       setRecordingBlob(blob);
       setRecordingUrl(url);
@@ -613,7 +765,9 @@ export default function App() {
       if (mediaStreamRef.current) {
         mediaStreamRef.current
           .getTracks()
-          .forEach((track) => track.stop());
+          .forEach((track) =>
+            track.stop()
+          );
 
         mediaStreamRef.current = null;
       }
@@ -622,9 +776,11 @@ export default function App() {
     };
 
     recorder.start();
+
     setIsRecording(true);
 
-    const duration = settings.speakMinutes * 60;
+    const duration =
+      settings.speakMinutes * 60;
 
     setTimerDuration(duration);
     setRemainingSeconds(duration);
@@ -634,6 +790,8 @@ export default function App() {
 
   const startAudioSpeaking = async () => {
     try {
+      initAudio();
+
       if (
         !navigator.mediaDevices ||
         !navigator.mediaDevices.getUserMedia
@@ -650,20 +808,25 @@ export default function App() {
         });
 
       mediaStreamRef.current = stream;
+
       setRecordingMode("audio");
 
       createRecorder(stream, "audio");
     } catch (error) {
       console.error(error);
+
       alert(
         "Microphone permission is required for audio recording."
       );
+
       setRecordingMode(null);
     }
   };
 
   const startVideoSpeaking = async () => {
     try {
+      initAudio();
+
       if (
         !navigator.mediaDevices ||
         !navigator.mediaDevices.getUserMedia
@@ -681,14 +844,17 @@ export default function App() {
         });
 
       mediaStreamRef.current = stream;
+
       setRecordingMode("video");
 
       createRecorder(stream, "video");
     } catch (error) {
       console.error(error);
+
       alert(
         "Camera and microphone permission are required for video recording."
       );
+
       setRecordingMode(null);
     }
   };
@@ -696,7 +862,8 @@ export default function App() {
   const stopMediaRecording = () => {
     if (
       mediaRecorderRef.current &&
-      mediaRecorderRef.current.state !== "inactive"
+      mediaRecorderRef.current.state !==
+        "inactive"
     ) {
       mediaRecorderRef.current.stop();
     }
@@ -711,17 +878,17 @@ export default function App() {
     setRecordingMode(null);
 
     setViewMode(
-      selectedQuestion ? "selected" : "idle"
+      selectedQuestion
+        ? "selected"
+        : "idle"
     );
   };
 
   /*
     CLOSE AFTER SESSION
 
-    Keep the previous topic visible.
-    Clear the previous question.
-    SPIN becomes highlighted.
-    RESEARCH becomes disabled.
+    Keep previous topic visible.
+    Clear previous question.
   */
   const closeCompletedSession = () => {
     if (isRecording) {
@@ -749,7 +916,10 @@ export default function App() {
   };
 
   const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
+    const minutes = Math.floor(
+      seconds / 60
+    );
+
     const secs = seconds % 60;
 
     return (
@@ -759,7 +929,8 @@ export default function App() {
     );
   };
 
-  const circleLength = 2 * Math.PI * 126;
+  const circleLength =
+    2 * Math.PI * 126;
 
   return (
     <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] overflow-hidden overscroll-none flex flex-col bg-[#050505] text-[#f5f5f5] selection:bg-neutral-800">
@@ -775,7 +946,9 @@ export default function App() {
 
         <div className="flex items-center">
           <button
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={() =>
+              setIsSettingsOpen(true)
+            }
             className="w-[42px] h-[42px] border border-transparent rounded-full bg-transparent text-[#8b8b8b] grid place-items-center cursor-pointer transition-all duration-250 hover:text-white hover:bg-[#111] hover:border-[#242424] active:scale-95"
             aria-label="Open settings"
           >
@@ -792,8 +965,16 @@ export default function App() {
               <path d="M18 7h2" />
               <path d="M4 17h2" />
               <path d="M10 17h10" />
-              <circle cx="16" cy="7" r="2" />
-              <circle cx="8" cy="17" r="2" />
+              <circle
+                cx="16"
+                cy="7"
+                r="2"
+              />
+              <circle
+                cx="8"
+                cy="17"
+                r="2"
+              />
             </svg>
           </button>
         </div>
@@ -812,7 +993,8 @@ export default function App() {
                   : "opacity-100"
               }`}
             >
-              {selectedTopic || "YOUR TOPIC"}
+              {selectedTopic ||
+                "YOUR TOPIC"}
             </div>
           )}
 
@@ -855,9 +1037,12 @@ export default function App() {
 
                   {/* RESEARCH */}
                   <button
-                    onClick={startResearchTimer}
+                    onClick={
+                      startResearchTimer
+                    }
                     disabled={
-                      !selectedQuestion || isSpinning
+                      !selectedQuestion ||
+                      isSpinning
                     }
                     aria-label="Research"
                     className={`min-w-[118px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.08em] transition-all duration-200 active:scale-95 ${
@@ -876,7 +1061,8 @@ export default function App() {
       </main>
 
       {/* TIMER */}
-      {viewMode === "activeTimer" && (
+      {viewMode ===
+        "activeTimer" && (
         <main className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] overflow-hidden flex items-center justify-center px-[14px]">
           <div className="flex flex-col items-center justify-center w-full">
 
@@ -884,17 +1070,21 @@ export default function App() {
             <div className="flex flex-col items-center justify-center min-h-[80px] mb-[24px] sm:mb-[35px]">
 
               <div className="max-w-[900px] px-[15px] text-[clamp(14px,2.2vw,22px)] font-bold text-white text-center">
-                {selectedQuestion || selectedTopic}
+                {selectedQuestion ||
+                  selectedTopic}
               </div>
 
-              {timerState === "research" && (
+              {timerState ===
+                "research" && (
                 <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
                   RESEARCHING
                 </div>
               )}
 
-              {timerState === "speak" &&
-                recordingMode === "audio" && (
+              {timerState ===
+                "speak" &&
+                recordingMode ===
+                  "audio" && (
                   <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
                     {isRecording
                       ? "RECORDING"
@@ -902,8 +1092,10 @@ export default function App() {
                   </div>
                 )}
 
-              {timerState === "speak" &&
-                recordingMode === "video" && (
+              {timerState ===
+                "speak" &&
+                recordingMode ===
+                  "video" && (
                   <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
                     {isRecording
                       ? "RECORDING"
@@ -936,7 +1128,9 @@ export default function App() {
                   strokeWidth="6"
                   strokeLinecap="round"
                   style={{
-                    strokeDasharray: circleLength,
+                    strokeDasharray:
+                      circleLength,
+
                     strokeDashoffset:
                       circleLength *
                       (1 -
@@ -947,7 +1141,9 @@ export default function App() {
               </svg>
 
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[48px] sm:text-[56px] font-extrabold tracking-[-0.05em] leading-none tabular-nums m-0 text-center z-10">
-                {formatTime(remainingSeconds)}
+                {formatTime(
+                  remainingSeconds
+                )}
               </div>
             </div>
 
@@ -955,10 +1151,14 @@ export default function App() {
             <div className="mt-[28px] sm:mt-[38px] min-h-[70px] flex items-center justify-center">
 
               {/* RESEARCH DONE */}
-              {timerState === "research" && (
+              {timerState ===
+                "research" && (
                 <div className="flex items-center justify-center gap-[12px]">
+
                   <button
-                    onClick={handleDoneResearch}
+                    onClick={
+                      handleDoneResearch
+                    }
                     className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
                   >
                     DONE
@@ -974,10 +1174,14 @@ export default function App() {
               )}
 
               {/* SPEAK BUTTON */}
-              {timerState === "speakReady" && (
+              {timerState ===
+                "speakReady" && (
                 <div className="flex items-center justify-center gap-[12px]">
+
                   <button
-                    onClick={handleSpeakButton}
+                    onClick={
+                      handleSpeakButton
+                    }
                     className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
                   >
                     SPEAK
@@ -993,14 +1197,17 @@ export default function App() {
               )}
 
               {/* SPEAKING TIMER */}
-              {timerState === "speak" && (
+              {timerState ===
+                "speak" && (
                 <div className="flex items-center justify-center gap-[12px]">
 
                   <button
                     onClick={() => {
                       if (
-                        recordingMode === "audio" ||
-                        recordingMode === "video"
+                        recordingMode ===
+                          "audio" ||
+                        recordingMode ===
+                          "video"
                       ) {
                         stopMediaRecording();
                       }
@@ -1032,7 +1239,7 @@ export default function App() {
       <footer className="h-[58px] shrink-0 flex items-center justify-center text-[#777] text-[10px] tracking-[0.04em]">
 
         <a
-          className="inline-flex items-center gap-[6px] text-[#bdbdbd] no-underline font-bold transition-colors hover:text-white"
+          className="inline-flex items-center gap-[6px] text-[#bdbdbd] no-underline font-semibold transition-colors hover:text-white"
           href="https://www.instagram.com/__gautam17/"
           target="_blank"
           rel="noopener noreferrer"
@@ -1079,12 +1286,14 @@ export default function App() {
           aria-modal="true"
           aria-label="Settings"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
               setIsSettingsOpen(false);
             }
           }}
         >
-
           <div className="w-full max-w-[430px] max-h-[90dvh] overflow-hidden bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[23px]">
 
             <div className="flex justify-between items-center mb-[27px]">
@@ -1094,7 +1303,9 @@ export default function App() {
               </div>
 
               <button
-                onClick={() => setIsSettingsOpen(false)}
+                onClick={() =>
+                  setIsSettingsOpen(false)
+                }
                 aria-label="Close settings"
                 className="w-[32px] h-[32px] border border-[#242424] rounded-full bg-transparent text-[#8b8b8b] cursor-pointer text-[18px] leading-none hover:text-white hover:bg-[#181818] active:scale-95 transition-transform duration-150"
               >
@@ -1119,16 +1330,17 @@ export default function App() {
 
                     setSettings((s) => ({
                       ...s,
-                      speakMinutes: Math.max(
-                        1,
-                        Math.min(
-                          10,
-                          s.speakMinutes +
-                            (event.deltaY < 0
-                              ? 1
-                              : -1)
-                        )
-                      ),
+                      speakMinutes:
+                        Math.max(
+                          1,
+                          Math.min(
+                            10,
+                            s.speakMinutes +
+                              (event.deltaY < 0
+                                ? 1
+                                : -1)
+                          )
+                        ),
                     }));
                   }}
                   onTouchStart={(event) => {
@@ -1137,25 +1349,32 @@ export default function App() {
                   }}
                   onTouchMove={(event) => {
                     const startY = Number(
-                      event.currentTarget.dataset.startY
+                      event.currentTarget.dataset
+                        .startY
                     );
 
                     const currentY =
                       event.touches[0].clientY;
 
-                    const diff = startY - currentY;
+                    const diff =
+                      startY - currentY;
 
-                    if (Math.abs(diff) > 25) {
+                    if (
+                      Math.abs(diff) > 25
+                    ) {
                       setSettings((s) => ({
                         ...s,
-                        speakMinutes: Math.max(
-                          1,
-                          Math.min(
-                            10,
-                            s.speakMinutes +
-                              (diff > 0 ? 1 : -1)
-                          )
-                        ),
+                        speakMinutes:
+                          Math.max(
+                            1,
+                            Math.min(
+                              10,
+                              s.speakMinutes +
+                                (diff > 0
+                                  ? 1
+                                  : -1)
+                            )
+                          ),
                       }));
 
                       event.currentTarget.dataset.startY =
@@ -1163,7 +1382,6 @@ export default function App() {
                     }
                   }}
                 >
-
                   <div className="w-[66px] text-right text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
                     {settings.speakMinutes}
                   </div>
@@ -1178,10 +1396,12 @@ export default function App() {
                       onClick={() =>
                         setSettings((s) => ({
                           ...s,
-                          speakMinutes: Math.min(
-                            10,
-                            s.speakMinutes + 1
-                          ),
+                          speakMinutes:
+                            Math.min(
+                              10,
+                              s.speakMinutes +
+                                1
+                            ),
                         }))
                       }
                       aria-label="Increase speaking time"
@@ -1194,10 +1414,12 @@ export default function App() {
                       onClick={() =>
                         setSettings((s) => ({
                           ...s,
-                          speakMinutes: Math.max(
-                            1,
-                            s.speakMinutes - 1
-                          ),
+                          speakMinutes:
+                            Math.max(
+                              1,
+                              s.speakMinutes -
+                                1
+                            ),
                         }))
                       }
                       aria-label="Decrease speaking time"
@@ -1207,7 +1429,6 @@ export default function App() {
                     </button>
 
                   </div>
-
                 </div>
               </div>
 
@@ -1225,16 +1446,17 @@ export default function App() {
 
                     setSettings((s) => ({
                       ...s,
-                      researchMinutes: Math.max(
-                        1,
-                        Math.min(
-                          30,
-                          s.researchMinutes +
-                            (event.deltaY < 0
-                              ? 1
-                              : -1)
-                        )
-                      ),
+                      researchMinutes:
+                        Math.max(
+                          1,
+                          Math.min(
+                            30,
+                            s.researchMinutes +
+                              (event.deltaY < 0
+                                ? 1
+                                : -1)
+                          )
+                        ),
                     }));
                   }}
                   onTouchStart={(event) => {
@@ -1243,25 +1465,32 @@ export default function App() {
                   }}
                   onTouchMove={(event) => {
                     const startY = Number(
-                      event.currentTarget.dataset.startY
+                      event.currentTarget.dataset
+                        .startY
                     );
 
                     const currentY =
                       event.touches[0].clientY;
 
-                    const diff = startY - currentY;
+                    const diff =
+                      startY - currentY;
 
-                    if (Math.abs(diff) > 25) {
+                    if (
+                      Math.abs(diff) > 25
+                    ) {
                       setSettings((s) => ({
                         ...s,
-                        researchMinutes: Math.max(
-                          1,
-                          Math.min(
-                            30,
-                            s.researchMinutes +
-                              (diff > 0 ? 1 : -1)
-                          )
-                        ),
+                        researchMinutes:
+                          Math.max(
+                            1,
+                            Math.min(
+                              30,
+                              s.researchMinutes +
+                                (diff > 0
+                                  ? 1
+                                  : -1)
+                            )
+                          ),
                       }));
 
                       event.currentTarget.dataset.startY =
@@ -1269,7 +1498,6 @@ export default function App() {
                     }
                   }}
                 >
-
                   <div className="w-[66px] text-right text-[40px] leading-none font-bold tracking-[-0.06em] tabular-nums">
                     {settings.researchMinutes}
                   </div>
@@ -1287,7 +1515,8 @@ export default function App() {
                           researchMinutes:
                             Math.min(
                               30,
-                              s.researchMinutes + 1
+                              s.researchMinutes +
+                                1
                             ),
                         }))
                       }
@@ -1304,7 +1533,8 @@ export default function App() {
                           researchMinutes:
                             Math.max(
                               1,
-                              s.researchMinutes - 1
+                              s.researchMinutes -
+                                1
                             ),
                         }))
                       }
@@ -1315,10 +1545,8 @@ export default function App() {
                     </button>
 
                   </div>
-
                 </div>
               </div>
-
             </div>
 
             {/* SOUND */}
@@ -1346,7 +1574,6 @@ export default function App() {
                     : "bg-[#151515] border-[#333]"
                 }`}
               >
-
                 <div
                   className={`w-[19px] h-[19px] rounded-full transition-all ${
                     !settings.muted
@@ -1354,9 +1581,7 @@ export default function App() {
                       : "bg-[#666]"
                   }`}
                 />
-
               </button>
-
             </div>
 
             {/* SPEAKING MODE */}
@@ -1372,27 +1597,32 @@ export default function App() {
                   ["normal", "NORMAL"],
                   ["audio", "AUDIO"],
                   ["video", "VIDEO"],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    onClick={() =>
-                      setSettings((s) => ({
-                        ...s,
-                        speakingMode: value,
-                      }))
-                    }
-                    className={`h-[42px] rounded-full border text-[9px] font-extrabold tracking-[0.08em] cursor-pointer transition-all active:scale-95 ${
-                      settings.speakingMode === value
-                        ? "border-white bg-white text-[#080808]"
-                        : "border-[#333] bg-transparent text-[#777] hover:text-white hover:border-[#666]"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                ].map(
+                  ([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() =>
+                        setSettings(
+                          (s) => ({
+                            ...s,
+                            speakingMode:
+                              value,
+                          })
+                        )
+                      }
+                      className={`h-[42px] rounded-full border text-[9px] font-extrabold tracking-[0.08em] cursor-pointer transition-all active:scale-95 ${
+                        settings.speakingMode ===
+                        value
+                          ? "border-white bg-white text-[#080808]"
+                          : "border-[#333] bg-transparent text-[#777] hover:text-white hover:border-[#666]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
 
               </div>
-
             </div>
 
             {/* TOPIC */}
@@ -1408,7 +1638,9 @@ export default function App() {
                   event.preventDefault();
 
                   const currentIndex =
-                    topics.indexOf(settings.topic);
+                    topics.indexOf(
+                      settings.topic
+                    );
 
                   const nextIndex =
                     event.deltaY < 0
@@ -1421,7 +1653,8 @@ export default function App() {
 
                   setSettings((s) => ({
                     ...s,
-                    topic: topics[nextIndex],
+                    topic:
+                      topics[nextIndex],
                   }));
                 }}
                 onTouchStart={(event) => {
@@ -1430,17 +1663,23 @@ export default function App() {
                 }}
                 onTouchMove={(event) => {
                   const startY = Number(
-                    event.currentTarget.dataset.startY
+                    event.currentTarget.dataset
+                      .startY
                   );
 
                   const currentY =
                     event.touches[0].clientY;
 
-                  const diff = startY - currentY;
+                  const diff =
+                    startY - currentY;
 
-                  if (Math.abs(diff) > 25) {
+                  if (
+                    Math.abs(diff) > 25
+                  ) {
                     const currentIndex =
-                      topics.indexOf(settings.topic);
+                      topics.indexOf(
+                        settings.topic
+                      );
 
                     const nextIndex =
                       diff > 0
@@ -1453,7 +1692,8 @@ export default function App() {
 
                     setSettings((s) => ({
                       ...s,
-                      topic: topics[nextIndex],
+                      topic:
+                        topics[nextIndex],
                     }));
 
                     event.currentTarget.dataset.startY =
@@ -1461,7 +1701,6 @@ export default function App() {
                   }
                 }}
               >
-
                 <div className="min-w-[150px] max-w-[230px] text-center text-[32px] leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-hidden text-ellipsis">
                   {settings.topic}
                 </div>
@@ -1519,21 +1758,21 @@ export default function App() {
                   </button>
 
                 </div>
-
               </div>
             </div>
 
             <div className="flex justify-end mt-[27px]">
 
               <button
-                onClick={() => setIsSettingsOpen(false)}
+                onClick={() =>
+                  setIsSettingsOpen(false)
+                }
                 className="h-[40px] px-[17px] border-none rounded-[9px] bg-white text-[#080808] text-[10px] font-extrabold tracking-[0.08em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
               >
                 SAVE CHANGES
               </button>
 
             </div>
-
           </div>
         </div>
       )}
@@ -1546,7 +1785,6 @@ export default function App() {
           aria-modal="true"
           aria-label="Session complete"
         >
-
           <div className="flex flex-col items-center max-w-full max-h-full overflow-hidden">
 
             <div className="text-[#8b8b8b] text-[10px] font-bold tracking-[0.2em] uppercase mb-[25px]">
@@ -1554,7 +1792,8 @@ export default function App() {
             </div>
 
             {/* AUDIO RECORDING PLAYBACK */}
-            {recordingMode === "audio" &&
+            {recordingMode ===
+              "audio" &&
               recordingUrl && (
                 <div className="mt-[5px] flex items-center justify-center">
                   <audio
@@ -1566,7 +1805,8 @@ export default function App() {
               )}
 
             {/* VIDEO RECORDING PLAYBACK */}
-            {recordingMode === "video" &&
+            {recordingMode ===
+              "video" &&
               recordingUrl && (
                 <div className="mt-[5px] flex items-center justify-center">
                   <video
@@ -1583,13 +1823,14 @@ export default function App() {
 
             {/* CLOSE */}
             <button
-              onClick={closeCompletedSession}
+              onClick={
+                closeCompletedSession
+              }
               aria-label="Close session"
               className="mt-[40px] h-[48px] min-w-[130px] px-[25px] border border-[#333] rounded-full bg-transparent text-[#777] text-[11px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-all duration-150"
             >
               CLOSE
             </button>
-
           </div>
         </div>
       )}
@@ -1648,7 +1889,7 @@ export default function App() {
           }
         }
       `}</style>
-
     </div>
   );
 }
+
