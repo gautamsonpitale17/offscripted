@@ -126,11 +126,21 @@ const topics = Object.keys(questionBanks);
 
 export default function App() {
   const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem("offscript_settings");
+    const saved = localStorage.getItem("offscripted_settings");
 
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+
+        return {
+          speakMinutes: parsed.speakMinutes ?? 1,
+          researchMinutes: parsed.researchMinutes ?? 10,
+          muted: parsed.muted ?? false,
+          topic: parsed.topic ?? "Python",
+
+          // NORMAL is always the fallback/default mode.
+          speakingMode: parsed.speakingMode ?? "normal",
+        };
       } catch {
         // fallback
       }
@@ -174,8 +184,57 @@ export default function App() {
   const usedQuestionsRef = useRef({});
 
   useEffect(() => {
-    localStorage.setItem("offscript_settings", JSON.stringify(settings));
+    localStorage.setItem(
+      "offscripted_settings",
+      JSON.stringify(settings)
+    );
   }, [settings]);
+
+  /*
+    COMPLETE PAGE SCROLL LOCK
+
+    The application itself is fixed to the viewport and:
+    - html cannot scroll
+    - body cannot scroll
+    - #root cannot scroll
+    - overscroll is disabled
+    - touch scrolling of the page is disabled
+
+    Works across mobile, tablet, laptop and desktop.
+  */
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    const previousHtmlOverflow = html.style.overflow;
+    const previousHtmlHeight = html.style.height;
+    const previousHtmlWidth = html.style.width;
+
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyHeight = body.style.height;
+    const previousBodyWidth = body.style.width;
+    const previousBodyMargin = body.style.margin;
+
+    html.style.overflow = "hidden";
+    html.style.height = "100%";
+    html.style.width = "100%";
+
+    body.style.overflow = "hidden";
+    body.style.height = "100%";
+    body.style.width = "100%";
+    body.style.margin = "0";
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      html.style.height = previousHtmlHeight;
+      html.style.width = previousHtmlWidth;
+
+      body.style.overflow = previousBodyOverflow;
+      body.style.height = previousBodyHeight;
+      body.style.width = previousBodyWidth;
+      body.style.margin = previousBodyMargin;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -184,7 +243,9 @@ export default function App() {
       }
 
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current
+          .getTracks()
+          .forEach((track) => track.stop());
       }
     };
   }, [recordingUrl]);
@@ -230,18 +291,14 @@ export default function App() {
     timerState,
   ]);
 
-  /* PREVENT BACKGROUND SCROLLING WHILE MODALS ARE OPEN */
+  /* MODAL SCROLL LOCK */
   useEffect(() => {
-    const modalOpen = isSettingsOpen || isComplete;
-
-    if (modalOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
     };
   }, [isSettingsOpen, isComplete]);
 
@@ -267,14 +324,20 @@ export default function App() {
     oscillator.type = "sine";
 
     oscillator.frequency.setValueAtTime(520, now);
-    oscillator.frequency.exponentialRampToValueAtTime(180, now + 0.065);
+    oscillator.frequency.exponentialRampToValueAtTime(
+      180,
+      now + 0.065
+    );
 
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(
       Math.max(0.0001, 0.018 * intensity),
       now + 0.012
     );
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      now + 0.075
+    );
 
     oscillator.connect(gain);
     gain.connect(audioCtxRef.current.destination);
@@ -298,13 +361,28 @@ export default function App() {
     oscillator.type = "sine";
 
     oscillator.frequency.setValueAtTime(420, now);
-    oscillator.frequency.exponentialRampToValueAtTime(620, now + 0.16);
-    oscillator.frequency.exponentialRampToValueAtTime(760, now + 0.34);
+    oscillator.frequency.exponentialRampToValueAtTime(
+      620,
+      now + 0.16
+    );
+    oscillator.frequency.exponentialRampToValueAtTime(
+      760,
+      now + 0.34
+    );
 
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.035);
-    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.18);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+    gain.gain.exponentialRampToValueAtTime(
+      0.045,
+      now + 0.035
+    );
+    gain.gain.exponentialRampToValueAtTime(
+      0.025,
+      now + 0.18
+    );
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      now + 0.42
+    );
 
     oscillator.connect(gain);
     gain.connect(audioCtxRef.current.destination);
@@ -351,13 +429,6 @@ export default function App() {
     setIsComplete(false);
     setIsSpinning(true);
 
-    /*
-      SPIN ALWAYS WORKS.
-
-      Once a new spin starts, the previous selected question is cleared.
-      This makes RESEARCH disabled while the wheel is spinning and keeps
-      SPIN as the active/highlighted action.
-    */
     setSelectedQuestion(null);
     setCurrentText("READY?");
 
@@ -393,7 +464,10 @@ export default function App() {
       playTick(1 - progress * 0.25);
 
       await new Promise((resolve) =>
-        setTimeout(resolve, 45 + Math.pow(progress, 3) * 390)
+        setTimeout(
+          resolve,
+          45 + Math.pow(progress, 3) * 390
+        )
       );
     }
 
@@ -485,15 +559,27 @@ export default function App() {
     let options = {};
 
     if (mode === "video") {
-      if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")) {
+      if (
+        MediaRecorder.isTypeSupported(
+          "video/webm;codecs=vp9,opus"
+        )
+      ) {
         options.mimeType = "video/webm;codecs=vp9,opus";
-      } else if (MediaRecorder.isTypeSupported("video/webm")) {
+      } else if (
+        MediaRecorder.isTypeSupported("video/webm")
+      ) {
         options.mimeType = "video/webm";
       }
     } else {
-      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+      if (
+        MediaRecorder.isTypeSupported(
+          "audio/webm;codecs=opus"
+        )
+      ) {
         options.mimeType = "audio/webm;codecs=opus";
-      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+      } else if (
+        MediaRecorder.isTypeSupported("audio/webm")
+      ) {
         options.mimeType = "audio/webm";
       }
     }
@@ -511,7 +597,9 @@ export default function App() {
     recorder.onstop = () => {
       const mimeType =
         recorder.mimeType ||
-        (mode === "video" ? "video/webm" : "audio/webm");
+        (mode === "video"
+          ? "video/webm"
+          : "audio/webm");
 
       const blob = new Blob(audioChunksRef.current, {
         type: mimeType,
@@ -523,7 +611,10 @@ export default function App() {
       setRecordingUrl(url);
 
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current
+          .getTracks()
+          .forEach((track) => track.stop());
+
         mediaStreamRef.current = null;
       }
 
@@ -547,13 +638,16 @@ export default function App() {
         !navigator.mediaDevices ||
         !navigator.mediaDevices.getUserMedia
       ) {
-        alert("Audio recording is not supported by this browser.");
+        alert(
+          "Audio recording is not supported by this browser."
+        );
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
 
       mediaStreamRef.current = stream;
       setRecordingMode("audio");
@@ -561,7 +655,9 @@ export default function App() {
       createRecorder(stream, "audio");
     } catch (error) {
       console.error(error);
-      alert("Microphone permission is required for audio recording.");
+      alert(
+        "Microphone permission is required for audio recording."
+      );
       setRecordingMode(null);
     }
   };
@@ -572,14 +668,17 @@ export default function App() {
         !navigator.mediaDevices ||
         !navigator.mediaDevices.getUserMedia
       ) {
-        alert("Video recording is not supported by this browser.");
+        alert(
+          "Video recording is not supported by this browser."
+        );
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
 
       mediaStreamRef.current = stream;
       setRecordingMode("video");
@@ -611,18 +710,18 @@ export default function App() {
     setTimerState(null);
     setRecordingMode(null);
 
-    setViewMode(selectedQuestion ? "selected" : "idle");
+    setViewMode(
+      selectedQuestion ? "selected" : "idle"
+    );
   };
 
   /*
     CLOSE AFTER SESSION
 
-    Important:
-    - Keep selectedTopic so the same topic remains visible.
-    - Clear selectedQuestion so the next state is "before spin".
-    - Therefore SPIN is highlighted/enabled.
-    - RESEARCH is disabled/non-highlighted.
-    - The user can immediately spin again.
+    Keep the previous topic visible.
+    Clear the previous question.
+    SPIN becomes highlighted.
+    RESEARCH becomes disabled.
   */
   const closeCompletedSession = () => {
     if (isRecording) {
@@ -638,7 +737,6 @@ export default function App() {
 
     setIsComplete(false);
 
-    // KEEP selectedTopic from the previous session.
     setSelectedQuestion(null);
 
     setCurrentText("READY?");
@@ -664,12 +762,15 @@ export default function App() {
   const circleLength = 2 * Math.PI * 126;
 
   return (
-    <div className="w-full h-screen overflow-hidden flex flex-col bg-[#050505] text-[#f5f5f5] selection:bg-neutral-800">
+    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] overflow-hidden overscroll-none flex flex-col bg-[#050505] text-[#f5f5f5] selection:bg-neutral-800">
 
       {/* HEADER */}
       <header className="h-[78px] px-[20px] sm:px-[34px] flex items-center justify-between shrink-0">
         <div className="text-[18px] font-extrabold tracking-tight select-none">
-          offScripted<span className="text-[#5c5c5c] font-medium">.</span>
+          offScripted
+          <span className="text-[#5c5c5c] font-medium">
+            .
+          </span>
         </div>
 
         <div className="flex items-center">
@@ -699,15 +800,16 @@ export default function App() {
       </header>
 
       {/* MAIN */}
-      <main className="flex-1 min-h-0 w-full flex items-center justify-center px-[14px] sm:px-[24px] pb-[20px] sm:pb-[35px] overflow-hidden">
-
+      <main className="flex-1 min-h-0 w-full flex items-center justify-center px-[14px] sm:px-[24px] pb-[20px] sm:pb-[35px] overflow-hidden overscroll-none">
         <div className="w-full max-w-[1100px] flex flex-col items-center justify-center text-center">
 
           {/* YOUR TOPIC / SELECTED TOPIC */}
           {viewMode !== "activeTimer" && (
             <div
               className={`text-[#777] text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase mb-[22px] sm:mb-[30px] min-h-[12px] transition-opacity duration-300 ${
-                isSpinning ? "opacity-0" : "opacity-100"
+                isSpinning
+                  ? "opacity-0"
+                  : "opacity-100"
               }`}
             >
               {selectedTopic || "YOUR TOPIC"}
@@ -717,7 +819,6 @@ export default function App() {
           {/* MAIN TEXT */}
           {viewMode !== "activeTimer" && (
             <div className="w-full min-h-[160px] sm:min-h-[190px] flex items-center justify-center overflow-hidden relative">
-
               <div
                 className={`max-w-full px-[12px] sm:px-[20px] break-words ${
                   viewMode === "idle"
@@ -733,195 +834,199 @@ export default function App() {
           )}
 
           {/* BUTTONS */}
-          {viewMode !== "activeTimer" && !isSpinning && (
-            <div className="mt-[38px] sm:mt-[48px] flex flex-col items-center justify-center gap-[14px] w-full">
+          {viewMode !== "activeTimer" &&
+            !isSpinning && (
+              <div className="mt-[38px] sm:mt-[48px] flex flex-col items-center justify-center gap-[14px] w-full">
+                <div className="flex items-center justify-center gap-[8px]">
 
-              <div className="flex items-center justify-center gap-[8px]">
+                  {/* SPIN */}
+                  <button
+                    onClick={spin}
+                    disabled={isSpinning}
+                    aria-label="Spin"
+                    className={`min-w-[118px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all duration-200 hover:translate-y-[-2px] active:translate-y-0 active:scale-95 ${
+                      selectedQuestion
+                        ? "border-[#333] bg-transparent text-[#777] hover:text-white hover:border-[#666]"
+                        : "border-white bg-white text-[#080808] hover:bg-[#d8d8d8]"
+                    }`}
+                  >
+                    SPIN
+                  </button>
 
-                {/* SPIN
-                    - Always enabled whenever not currently spinning.
-                    - Highlighted BEFORE a new spin.
-                    - Non-highlighted AFTER a successful spin.
-                */}
-                <button
-                  onClick={spin}
-                  disabled={isSpinning}
-                  aria-label="Spin"
-                  className={`min-w-[118px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer transition-all duration-200 hover:translate-y-[-2px] active:translate-y-0 active:scale-95 ${
-                    selectedQuestion
-                      ? "border-[#333] bg-transparent text-[#777] hover:text-white hover:border-[#666]"
-                      : "border-white bg-white text-[#080808] hover:bg-[#d8d8d8]"
-                  }`}
-                >
-                  SPIN
-                </button>
-
-                {/* RESEARCH
-                    - Disabled + non-highlighted BEFORE spin.
-                    - Enabled + highlighted ONLY AFTER spin.
-                */}
-                <button
-                  onClick={startResearchTimer}
-                  disabled={!selectedQuestion || isSpinning}
-                  aria-label="Research"
-                  className={`min-w-[118px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.08em] transition-all duration-200 active:scale-95 ${
-                    selectedQuestion && !isSpinning
-                      ? "border-white bg-white text-[#080808] hover:bg-[#d8d8d8] hover:translate-y-[-1px] cursor-pointer"
-                      : "border-[#242424] bg-[#111] text-[#8b8b8b] opacity-25 cursor-not-allowed pointer-events-none"
-                  }`}
-                >
-                  RESEARCH
-                </button>
-
-              </div>
-            </div>
-          )}
-
-          {/* TIMER */}
-          {viewMode === "activeTimer" && (
-            <div className="flex flex-col items-center justify-center w-full">
-
-              {/* CONTENT ABOVE CIRCLE */}
-              <div className="flex flex-col items-center justify-center min-h-[80px] mb-[24px] sm:mb-[35px]">
-
-                <div className="max-w-[900px] px-[15px] text-[clamp(14px,2.2vw,22px)] font-bold text-white text-center">
-                  {selectedQuestion || selectedTopic}
-                </div>
-
-                {timerState === "research" && (
-                  <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
-                    RESEARCHING
-                  </div>
-                )}
-
-                {timerState === "speak" && recordingMode === "audio" && (
-                  <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
-                    {isRecording ? "RECORDING" : "AUDIO"}
-                  </div>
-                )}
-
-                {timerState === "speak" && recordingMode === "video" && (
-                  <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
-                    {isRecording ? "RECORDING" : "VIDEO"}
-                  </div>
-                )}
-              </div>
-
-              {/* COUNTDOWN CIRCLE */}
-              <div className="relative w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] rounded-full flex flex-col items-center justify-center shrink-0">
-
-                <svg
-                  className="absolute top-0 left-0 w-full h-full -rotate-90 overflow-visible"
-                  viewBox="0 0 260 260"
-                >
-                  <circle
-                    className="fill-none stroke-[#303030]"
-                    cx="130"
-                    cy="130"
-                    r="126"
-                    strokeWidth="6"
-                    strokeLinecap="round"
-                  />
-
-                  <circle
-                    className="fill-none stroke-white transition-all duration-1000 linear"
-                    cx="130"
-                    cy="130"
-                    r="126"
-                    strokeWidth="6"
-                    strokeLinecap="round"
-                    style={{
-                      strokeDasharray: circleLength,
-                      strokeDashoffset:
-                        circleLength *
-                        (1 - remainingSeconds / timerDuration),
-                    }}
-                  />
-                </svg>
-
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[48px] sm:text-[56px] font-extrabold tracking-[-0.05em] leading-none tabular-nums m-0 text-center z-10">
-                  {formatTime(remainingSeconds)}
+                  {/* RESEARCH */}
+                  <button
+                    onClick={startResearchTimer}
+                    disabled={
+                      !selectedQuestion || isSpinning
+                    }
+                    aria-label="Research"
+                    className={`min-w-[118px] sm:min-w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border rounded-full text-[10px] sm:text-[11px] font-bold tracking-[0.08em] transition-all duration-200 active:scale-95 ${
+                      selectedQuestion &&
+                      !isSpinning
+                        ? "border-white bg-white text-[#080808] hover:bg-[#d8d8d8] hover:translate-y-[-1px] cursor-pointer"
+                        : "border-[#242424] bg-[#111] text-[#8b8b8b] opacity-25 cursor-not-allowed pointer-events-none"
+                    }`}
+                  >
+                    RESEARCH
+                  </button>
                 </div>
               </div>
-
-              {/* CONTENT BELOW CIRCLE */}
-              <div className="mt-[28px] sm:mt-[38px] min-h-[70px] flex items-center justify-center">
-
-                {/* RESEARCH DONE */}
-                {timerState === "research" && (
-                  <div className="flex items-center justify-center gap-[12px]">
-                    <button
-                      onClick={handleDoneResearch}
-                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
-                    >
-                      DONE
-                    </button>
-
-                    <button
-                      onClick={closeTimer}
-                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
-                    >
-                      CLOSE
-                    </button>
-                  </div>
-                )}
-
-                {/* SPEAK BUTTON */}
-                {timerState === "speakReady" && (
-                  <div className="flex items-center justify-center gap-[12px]">
-                    <button
-                      onClick={handleSpeakButton}
-                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
-                    >
-                      SPEAK
-                    </button>
-
-                    <button
-                      onClick={closeTimer}
-                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
-                    >
-                      CLOSE
-                    </button>
-                  </div>
-                )}
-
-                {/* SPEAKING TIMER */}
-                {timerState === "speak" && (
-                  <div className="flex items-center justify-center gap-[12px]">
-
-                    <button
-                      onClick={() => {
-                        if (
-                          recordingMode === "audio" ||
-                          recordingMode === "video"
-                        ) {
-                          stopMediaRecording();
-                        }
-
-                        setTimerState(null);
-                        setIsComplete(true);
-                        setViewMode("idle");
-                      }}
-                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
-                    >
-                      DONE
-                    </button>
-
-                    <button
-                      onClick={closeTimer}
-                      className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
-                    >
-                      CLOSE
-                    </button>
-
-                  </div>
-                )}
-
-              </div>
-            </div>
-          )}
+            )}
         </div>
       </main>
+
+      {/* TIMER */}
+      {viewMode === "activeTimer" && (
+        <main className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] overflow-hidden flex items-center justify-center px-[14px]">
+          <div className="flex flex-col items-center justify-center w-full">
+
+            {/* CONTENT ABOVE CIRCLE */}
+            <div className="flex flex-col items-center justify-center min-h-[80px] mb-[24px] sm:mb-[35px]">
+
+              <div className="max-w-[900px] px-[15px] text-[clamp(14px,2.2vw,22px)] font-bold text-white text-center">
+                {selectedQuestion || selectedTopic}
+              </div>
+
+              {timerState === "research" && (
+                <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
+                  RESEARCHING
+                </div>
+              )}
+
+              {timerState === "speak" &&
+                recordingMode === "audio" && (
+                  <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
+                    {isRecording
+                      ? "RECORDING"
+                      : "AUDIO"}
+                  </div>
+                )}
+
+              {timerState === "speak" &&
+                recordingMode === "video" && (
+                  <div className="mt-[12px] text-[10px] sm:text-[12px] font-light text-[#8b8b8b] tracking-[0.15em] uppercase text-center">
+                    {isRecording
+                      ? "RECORDING"
+                      : "VIDEO"}
+                  </div>
+                )}
+            </div>
+
+            {/* COUNTDOWN CIRCLE */}
+            <div className="relative w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] rounded-full flex flex-col items-center justify-center shrink-0">
+
+              <svg
+                className="absolute top-0 left-0 w-full h-full -rotate-90 overflow-visible"
+                viewBox="0 0 260 260"
+              >
+                <circle
+                  className="fill-none stroke-[#303030]"
+                  cx="130"
+                  cy="130"
+                  r="126"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                />
+
+                <circle
+                  className="fill-none stroke-white transition-all duration-1000 linear"
+                  cx="130"
+                  cy="130"
+                  r="126"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  style={{
+                    strokeDasharray: circleLength,
+                    strokeDashoffset:
+                      circleLength *
+                      (1 -
+                        remainingSeconds /
+                          timerDuration),
+                  }}
+                />
+              </svg>
+
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[48px] sm:text-[56px] font-extrabold tracking-[-0.05em] leading-none tabular-nums m-0 text-center z-10">
+                {formatTime(remainingSeconds)}
+              </div>
+            </div>
+
+            {/* CONTENT BELOW CIRCLE */}
+            <div className="mt-[28px] sm:mt-[38px] min-h-[70px] flex items-center justify-center">
+
+              {/* RESEARCH DONE */}
+              {timerState === "research" && (
+                <div className="flex items-center justify-center gap-[12px]">
+                  <button
+                    onClick={handleDoneResearch}
+                    className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
+                  >
+                    DONE
+                  </button>
+
+                  <button
+                    onClick={closeTimer}
+                    className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
+                  >
+                    CLOSE
+                  </button>
+                </div>
+              )}
+
+              {/* SPEAK BUTTON */}
+              {timerState === "speakReady" && (
+                <div className="flex items-center justify-center gap-[12px]">
+                  <button
+                    onClick={handleSpeakButton}
+                    className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
+                  >
+                    SPEAK
+                  </button>
+
+                  <button
+                    onClick={closeTimer}
+                    className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
+                  >
+                    CLOSE
+                  </button>
+                </div>
+              )}
+
+              {/* SPEAKING TIMER */}
+              {timerState === "speak" && (
+                <div className="flex items-center justify-center gap-[12px]">
+
+                  <button
+                    onClick={() => {
+                      if (
+                        recordingMode === "audio" ||
+                        recordingMode === "video"
+                      ) {
+                        stopMediaRecording();
+                      }
+
+                      setTimerState(null);
+                      setIsComplete(true);
+                      setViewMode("idle");
+                    }}
+                    className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-white rounded-full bg-white text-[#080808] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:bg-[#d8d8d8] active:scale-95 transition-transform duration-150"
+                  >
+                    DONE
+                  </button>
+
+                  <button
+                    onClick={closeTimer}
+                    className="w-[130px] sm:w-[150px] h-[46px] sm:h-[52px] px-[20px] sm:px-[28px] border border-[#333] rounded-full bg-transparent text-[#777] text-[10px] sm:text-[12px] font-extrabold tracking-[0.1em] cursor-pointer hover:text-white hover:border-[#666] active:scale-95 transition-transform duration-150"
+                  >
+                    CLOSE
+                  </button>
+
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+      )}
 
       {/* FOOTER */}
       <footer className="h-[58px] shrink-0 flex items-center justify-center text-[#777] text-[10px] tracking-[0.04em]">
@@ -943,18 +1048,33 @@ export default function App() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <rect x="3" y="3" width="18" height="18" rx="5" />
-            <circle cx="12" cy="12" r="4" />
-            <circle cx="17.5" cy="6.5" r="1" />
+            <rect
+              x="3"
+              y="3"
+              width="18"
+              height="18"
+              rx="5"
+            />
+
+            <circle
+              cx="12"
+              cy="12"
+              r="4"
+            />
+
+            <circle
+              cx="17.5"
+              cy="6.5"
+              r="1"
+            />
           </svg>
         </a>
-
       </footer>
 
       {/* SETTINGS */}
       {isSettingsOpen && (
         <div
-          className="fixed inset-0 z-[200] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[20px] animate-[modalFadeIn_180ms_ease-out]"
+          className="fixed inset-0 z-[200] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[20px] overflow-hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Settings"
@@ -965,7 +1085,7 @@ export default function App() {
           }}
         >
 
-          <div className="w-full max-w-[430px] max-h-[90vh] overflow-hidden bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[23px] animate-[modalScaleIn_180ms_ease-out]">
+          <div className="w-full max-w-[430px] max-h-[90dvh] overflow-hidden bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[23px]">
 
             <div className="flex justify-between items-center mb-[27px]">
 
@@ -1003,7 +1123,10 @@ export default function App() {
                         1,
                         Math.min(
                           10,
-                          s.speakMinutes + (event.deltaY < 0 ? 1 : -1)
+                          s.speakMinutes +
+                            (event.deltaY < 0
+                              ? 1
+                              : -1)
                         )
                       ),
                     }));
@@ -1017,7 +1140,9 @@ export default function App() {
                       event.currentTarget.dataset.startY
                     );
 
-                    const currentY = event.touches[0].clientY;
+                    const currentY =
+                      event.touches[0].clientY;
+
                     const diff = startY - currentY;
 
                     if (Math.abs(diff) > 25) {
@@ -1027,12 +1152,14 @@ export default function App() {
                           1,
                           Math.min(
                             10,
-                            s.speakMinutes + (diff > 0 ? 1 : -1)
+                            s.speakMinutes +
+                              (diff > 0 ? 1 : -1)
                           )
                         ),
                       }));
 
-                      event.currentTarget.dataset.startY = currentY;
+                      event.currentTarget.dataset.startY =
+                        currentY;
                     }
                   }}
                 >
@@ -1103,8 +1230,10 @@ export default function App() {
                         Math.min(
                           30,
                           s.researchMinutes +
-                            (event.deltaY < 0 ? 1 : -1)
-                        ),
+                            (event.deltaY < 0
+                              ? 1
+                              : -1)
+                        )
                       ),
                     }));
                   }}
@@ -1117,7 +1246,9 @@ export default function App() {
                       event.currentTarget.dataset.startY
                     );
 
-                    const currentY = event.touches[0].clientY;
+                    const currentY =
+                      event.touches[0].clientY;
+
                     const diff = startY - currentY;
 
                     if (Math.abs(diff) > 25) {
@@ -1127,12 +1258,14 @@ export default function App() {
                           1,
                           Math.min(
                             30,
-                            s.researchMinutes + (diff > 0 ? 1 : -1)
+                            s.researchMinutes +
+                              (diff > 0 ? 1 : -1)
                           )
                         ),
                       }));
 
-                      event.currentTarget.dataset.startY = currentY;
+                      event.currentTarget.dataset.startY =
+                        currentY;
                     }
                   }}
                 >
@@ -1151,10 +1284,11 @@ export default function App() {
                       onClick={() =>
                         setSettings((s) => ({
                           ...s,
-                          researchMinutes: Math.min(
-                            30,
-                            s.researchMinutes + 1
-                          ),
+                          researchMinutes:
+                            Math.min(
+                              30,
+                              s.researchMinutes + 1
+                            ),
                         }))
                       }
                       aria-label="Increase research time"
@@ -1167,10 +1301,11 @@ export default function App() {
                       onClick={() =>
                         setSettings((s) => ({
                           ...s,
-                          researchMinutes: Math.max(
-                            1,
-                            s.researchMinutes - 1
-                          ),
+                          researchMinutes:
+                            Math.max(
+                              1,
+                              s.researchMinutes - 1
+                            ),
                         }))
                       }
                       aria-label="Decrease research time"
@@ -1200,7 +1335,11 @@ export default function App() {
                     muted: !s.muted,
                   }))
                 }
-                aria-label={settings.muted ? "Enable sound" : "Mute sound"}
+                aria-label={
+                  settings.muted
+                    ? "Enable sound"
+                    : "Mute sound"
+                }
                 className={`w-[46px] h-[25px] p-[2px] border rounded-full cursor-pointer relative transition-all active:scale-95 ${
                   !settings.muted
                     ? "bg-white border-white"
@@ -1268,14 +1407,16 @@ export default function App() {
                 onWheel={(event) => {
                   event.preventDefault();
 
-                  const currentIndex = topics.indexOf(
-                    settings.topic
-                  );
+                  const currentIndex =
+                    topics.indexOf(settings.topic);
 
                   const nextIndex =
                     event.deltaY < 0
-                      ? (currentIndex + 1) % topics.length
-                      : (currentIndex - 1 + topics.length) %
+                      ? (currentIndex + 1) %
+                        topics.length
+                      : (currentIndex -
+                          1 +
+                          topics.length) %
                         topics.length;
 
                   setSettings((s) => ({
@@ -1292,18 +1433,22 @@ export default function App() {
                     event.currentTarget.dataset.startY
                   );
 
-                  const currentY = event.touches[0].clientY;
+                  const currentY =
+                    event.touches[0].clientY;
+
                   const diff = startY - currentY;
 
                   if (Math.abs(diff) > 25) {
-                    const currentIndex = topics.indexOf(
-                      settings.topic
-                    );
+                    const currentIndex =
+                      topics.indexOf(settings.topic);
 
                     const nextIndex =
                       diff > 0
-                        ? (currentIndex + 1) % topics.length
-                        : (currentIndex - 1 + topics.length) %
+                        ? (currentIndex + 1) %
+                          topics.length
+                        : (currentIndex -
+                            1 +
+                            topics.length) %
                           topics.length;
 
                     setSettings((s) => ({
@@ -1311,7 +1456,8 @@ export default function App() {
                       topic: topics[nextIndex],
                     }));
 
-                    event.currentTarget.dataset.startY = currentY;
+                    event.currentTarget.dataset.startY =
+                      currentY;
                   }
                 }}
               >
@@ -1324,12 +1470,16 @@ export default function App() {
 
                   <button
                     onClick={() => {
-                      const index = topics.indexOf(
-                        settings.topic
-                      );
+                      const index =
+                        topics.indexOf(
+                          settings.topic
+                        );
 
                       const next =
-                        topics[(index + 1) % topics.length];
+                        topics[
+                          (index + 1) %
+                            topics.length
+                        ];
 
                       setSettings((s) => ({
                         ...s,
@@ -1344,13 +1494,16 @@ export default function App() {
 
                   <button
                     onClick={() => {
-                      const index = topics.indexOf(
-                        settings.topic
-                      );
+                      const index =
+                        topics.indexOf(
+                          settings.topic
+                        );
 
                       const previous =
                         topics[
-                          (index - 1 + topics.length) %
+                          (index -
+                            1 +
+                            topics.length) %
                             topics.length
                         ];
 
@@ -1388,49 +1541,47 @@ export default function App() {
       {/* SESSION COMPLETE */}
       {isComplete && (
         <div
-          className="fixed inset-0 z-[150] bg-[rgba(5,5,5,0.97)] flex items-center justify-center text-center p-[20px] sm:p-[30px] animate-[modalFadeIn_180ms_ease-out]"
+          className="fixed inset-0 z-[150] bg-[rgba(5,5,5,0.97)] flex items-center justify-center text-center p-[20px] sm:p-[30px] overflow-hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Session complete"
         >
 
-          <div className="flex flex-col items-center max-w-full animate-[modalScaleIn_180ms_ease-out]">
+          <div className="flex flex-col items-center max-w-full max-h-full overflow-hidden">
 
             <div className="text-[#8b8b8b] text-[10px] font-bold tracking-[0.2em] uppercase mb-[25px]">
               Session complete
             </div>
 
             {/* AUDIO RECORDING PLAYBACK */}
-            {recordingMode === "audio" && recordingUrl && (
-              <div className="mt-[5px] flex items-center justify-center">
-
-                <audio
-                  src={recordingUrl}
-                  controls
-                  className="h-[40px] max-w-[280px]"
-                />
-
-              </div>
-            )}
+            {recordingMode === "audio" &&
+              recordingUrl && (
+                <div className="mt-[5px] flex items-center justify-center">
+                  <audio
+                    src={recordingUrl}
+                    controls
+                    className="h-[40px] max-w-[280px]"
+                  />
+                </div>
+              )}
 
             {/* VIDEO RECORDING PLAYBACK */}
-            {recordingMode === "video" && recordingUrl && (
-              <div className="mt-[5px] flex items-center justify-center">
-
-                <video
-                  ref={videoRef}
-                  src={recordingUrl}
-                  controls
-                  playsInline
-                  className="w-[min(520px,80vw)] max-h-[55vh] rounded-[12px] border border-[#242424] object-contain"
-                />
-
-              </div>
-            )}
+            {recordingMode === "video" &&
+              recordingUrl && (
+                <div className="mt-[5px] flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    src={recordingUrl}
+                    controls
+                    playsInline
+                    className="w-[min(520px,80vw)] max-h-[55dvh] rounded-[12px] border border-[#242424] object-contain"
+                  />
+                </div>
+              )}
 
             {/* NORMAL MODE: NO MESSAGE */}
 
-            {/* CLOSE — NON-HIGHLIGHTED */}
+            {/* CLOSE */}
             <button
               onClick={closeCompletedSession}
               aria-label="Close session"
@@ -1443,12 +1594,43 @@ export default function App() {
         </div>
       )}
 
-      {/* ANIMATION STYLES */}
+      {/* GLOBAL STYLES */}
       <style>{`
+        html,
+        body,
+        #root {
+          width: 100%;
+          height: 100%;
+          max-width: 100%;
+          max-height: 100%;
+          margin: 0;
+          padding: 0;
+          overflow: hidden !important;
+        }
+
+        html {
+          overscroll-behavior: none;
+        }
+
+        body {
+          overscroll-behavior: none;
+          overflow: hidden !important;
+          touch-action: manipulation;
+        }
+
+        #root {
+          overflow: hidden !important;
+        }
+
+        * {
+          box-sizing: border-box;
+        }
+
         @keyframes modalFadeIn {
           from {
             opacity: 0;
           }
+
           to {
             opacity: 1;
           }
@@ -1459,6 +1641,7 @@ export default function App() {
             opacity: 0;
             transform: scale(0.97);
           }
+
           to {
             opacity: 1;
             transform: scale(1);
