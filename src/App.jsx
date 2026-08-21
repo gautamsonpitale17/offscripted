@@ -1843,15 +1843,15 @@ export default function App() {
             onClick={() =>
               setIsSettingsOpen(true)
             }
-            className="w-[42px] h-[42px] border border-transparent rounded-full bg-transparent text-[#8b8b8b] grid place-items-center cursor-pointer transition-all duration-250 hover:text-white hover:bg-[#111] hover:border-[#242424] active:scale-95"
+            className="w-[42px] h-[42px] border border-transparent rounded-full bg-transparent text-white grid place-items-center cursor-pointer transition-all duration-250 hover:bg-[#111] hover:border-[#242424] active:scale-95"
             aria-label="Open settings"
           >
             <svg
-              className="w-[19px] h-[19px]"
+              className="w-[21px] h-[21px]"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="1.7"
+              strokeWidth="2.4"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
