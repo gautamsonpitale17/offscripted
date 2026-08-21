@@ -1691,7 +1691,7 @@ export default function App() {
                     {settings.category}
                   </div>
 
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[96px] pointer-events-none">
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[76px] pointer-events-none">
                     <button
                       onClick={() => {
                         const index =
@@ -1768,7 +1768,7 @@ export default function App() {
                     {settings.topic}
                   </div>
 
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[96px] pointer-events-none">
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[76px] pointer-events-none">
                     <button
                       onClick={() => {
                         const index =
@@ -1953,4 +1953,3 @@ export default function App() {
     </div>
   );
 }
-
