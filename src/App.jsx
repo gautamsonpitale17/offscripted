@@ -1,4 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
+import spinSoundUrl from "./offscripted-audio.mp3";
+
+// Duration (ms) of the spin sound effect. The spin animation's
+// tick timing is scaled to add up to exactly this long, so the
+// visuals land in sync with the audio ending.
+const SPIN_SOUND_DURATION_MS = 3683;
 
 const questionBanks = {
   HTML: [
@@ -915,6 +921,7 @@ export default function App() {
   const audioCtxRef = useRef(null);
   const audioMasterRef = useRef(null);
   const audioCompressorRef = useRef(null);
+  const spinAudioRef = useRef(null);
 
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
@@ -983,6 +990,8 @@ export default function App() {
       if (audioCtxRef.current) {
         audioCtxRef.current.close().catch(() => {});
       }
+
+      stopSpinSound();
     };
   }, [recordingUrl]);
 
@@ -1128,6 +1137,8 @@ export default function App() {
     }
   };
 
+  // No longer called during spin (the uploaded spin sound plays
+  // instead), kept here in case it's needed elsewhere.
   const playTick = (intensity = 1) => {
     if (settings.muted) return;
 
@@ -1241,6 +1252,30 @@ export default function App() {
     oscillator.stop(now + 0.55);
   };
 
+  const playSpinSound = () => {
+    if (settings.muted) return;
+
+    if (!spinAudioRef.current) {
+      spinAudioRef.current = new Audio(spinSoundUrl);
+    }
+
+    const spinAudio = spinAudioRef.current;
+
+    spinAudio.currentTime = 0;
+    spinAudio.loop = false;
+
+    spinAudio
+      .play()
+      .catch(() => {});
+  };
+
+  const stopSpinSound = () => {
+    if (!spinAudioRef.current) return;
+
+    spinAudioRef.current.pause();
+    spinAudioRef.current.currentTime = 0;
+  };
+
   /*
     ONLY USE QUESTIONS FROM questionBanks.
     No fallback questions are used.
@@ -1304,6 +1339,7 @@ export default function App() {
       getRandomQuestion(finalTopic);
 
     if (!finalQuestion) {
+      stopSpinSound();
       setIsSpinning(false);
       setViewMode("idle");
       setCurrentText("NO QUESTIONS");
@@ -1315,6 +1351,30 @@ export default function App() {
       Math.floor(
         Math.random() * 12
       );
+
+    // Same deceleration shape as before (fast at the start, slow
+    // near the end), but scaled so the ticks add up to exactly
+    // the spin sound's duration, keeping visuals and audio in sync.
+    const rawDelays = [];
+
+    for (let i = 0; i < totalTicks; i++) {
+      const progress = i / totalTicks;
+
+      rawDelays.push(
+        45 +
+          Math.pow(progress, 3) * 390
+      );
+    }
+
+    const rawTotal = rawDelays.reduce(
+      (sum, delay) => sum + delay,
+      0
+    );
+
+    const scale =
+      SPIN_SOUND_DURATION_MS / rawTotal;
+
+    playSpinSound();
 
     for (
       let i = 0;
@@ -1356,22 +1416,11 @@ export default function App() {
 
       setCurrentText(currentQuestion);
 
-      const progress = i / totalTicks;
-
-      playTick(
-        1 - progress * 0.25
-      );
-
       await new Promise(
         (resolve) =>
           setTimeout(
             resolve,
-            45 +
-              Math.pow(
-                progress,
-                3
-              ) *
-                390
+            rawDelays[i] * scale
           )
       );
     }
@@ -2068,7 +2117,7 @@ export default function App() {
 
       <footer className="h-[58px] shrink-0 flex items-center justify-center text-[#777] text-[10px] tracking-[0.04em]">
         <a
-          className="inline-flex items-center gap-[6px] text-[#bdbdbd] no-underline font-semibold transition-colors hover:text-white"
+          className="inline-flex items-center gap-[6px] text-[#bdbdbd] no-underline font-thin transition-colors hover:text-white"
           href="https://www.instagram.com/__gautam17/"
           target="_blank"
           rel="noopener noreferrer"
