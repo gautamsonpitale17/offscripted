@@ -997,7 +997,15 @@ export default function App() {
       return "text-[20px]";
     }
 
-    return "text-[18px]";
+    if (length <= 30) {
+      return "text-[18px]";
+    }
+
+    if (length <= 36) {
+      return "text-[16px]";
+    }
+
+    return "text-[14px]";
   };
 
   return (
@@ -1461,8 +1469,7 @@ export default function App() {
                           speakMinutes:
                             Math.max(
                               1,
-                              s.speakMinutes -
-                                1
+                              s.speakMinutes - 1
                             ),
                         }))
                       }
@@ -1575,8 +1582,7 @@ export default function App() {
                           researchMinutes:
                             Math.max(
                               1,
-                              s.researchMinutes -
-                                1
+                              s.researchMinutes - 1
                             ),
                         }))
                       }
@@ -1676,6 +1682,7 @@ export default function App() {
                       tracking-[-0.06em]
                       break-words
                       overflow-wrap-anywhere
+                      line-clamp-2
                       ${getSelectionTextClass(
                         settings.category
                       )}
@@ -1684,7 +1691,7 @@ export default function App() {
                     {settings.category}
                   </div>
 
-                  <div className="absolute left-1/2 -top-[6px] -translate-x-1/2 w-[180px] h-[108px] pointer-events-none">
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[96px] pointer-events-none">
                     <button
                       onClick={() => {
                         const index =
@@ -1703,7 +1710,7 @@ export default function App() {
                         );
                       }}
                       aria-label="Next category"
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white active:scale-90 transition-transform"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center top-0 hover:text-white active:scale-90 transition-transform"
                     >
                       ▲
                     </button>
@@ -1728,7 +1735,7 @@ export default function App() {
                         );
                       }}
                       aria-label="Previous category"
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white active:scale-90 transition-transform"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-0 hover:text-white active:scale-90 transition-transform"
                     >
                       ▼
                     </button>
@@ -1752,6 +1759,7 @@ export default function App() {
                       tracking-[-0.06em]
                       break-words
                       overflow-wrap-anywhere
+                      line-clamp-2
                       ${getSelectionTextClass(
                         settings.topic
                       )}
@@ -1760,7 +1768,7 @@ export default function App() {
                     {settings.topic}
                   </div>
 
-                  <div className="absolute left-1/2 -top-[6px] -translate-x-1/2 w-[180px] h-[108px] pointer-events-none">
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[96px] pointer-events-none">
                     <button
                       onClick={() => {
                         const index =
@@ -1782,7 +1790,7 @@ export default function App() {
                         );
                       }}
                       aria-label="Next topic"
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white active:scale-90 transition-transform"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center top-0 hover:text-white active:scale-90 transition-transform"
                     >
                       ▲
                     </button>
@@ -1810,7 +1818,7 @@ export default function App() {
                         );
                       }}
                       aria-label="Previous topic"
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white active:scale-90 transition-transform"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-0 hover:text-white active:scale-90 transition-transform"
                     >
                       ▼
                     </button>
@@ -1945,3 +1953,4 @@ export default function App() {
     </div>
   );
 }
+

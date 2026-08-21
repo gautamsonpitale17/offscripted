@@ -93,7 +93,7 @@ const categoryTopics = {
     "LlamaIndex",
   ],
 
-  "CS Fundamentals": [
+  "Computer Science": [
     "Data Structures",
     "Algorithms",
     "OOP",
