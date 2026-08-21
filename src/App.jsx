@@ -962,50 +962,77 @@ export default function App() {
   };
 
   /*
-    Dynamic font sizing for category/topic names.
+    Category / Topic font sizing.
 
-    Short names stay large.
-    Longer names become progressively smaller.
-    Very long names are allowed to wrap into two lines.
+    The text always remains on ONE LINE.
+
+    Font size is calculated directly from the
+    approximate rendered width of the complete
+    text. Longer names automatically become
+    smaller so they remain fully visible inside
+    the selector.
+
+    The available width is intentionally kept
+    slightly below the selector width so the
+    text does not collide with the arrow area.
   */
-  const getSelectionTextClass = (
+  const getSelectionFontSize = (
     value
   ) => {
-    if (!value) {
-      return "text-[32px]";
-    }
+    if (!value) return 32;
 
-    const length = value.length;
+    const text = String(value).trim();
 
-    if (length <= 8) {
-      return "text-[32px]";
-    }
+    if (!text) return 32;
 
-    if (length <= 12) {
-      return "text-[29px]";
-    }
+    const availableWidth = 190;
 
-    if (length <= 16) {
-      return "text-[26px]";
-    }
+    /*
+      Approximate average character width for
+      bold text. A conservative value is used
+      so long names are guaranteed to fit.
+    */
+    const averageCharacterWidth = 0.65;
 
-    if (length <= 20) {
-      return "text-[23px]";
-    }
+    const calculatedSize =
+      availableWidth /
+      (text.length *
+        averageCharacterWidth);
 
-    if (length <= 25) {
-      return "text-[20px]";
-    }
+    return Math.max(
+      7,
+      Math.min(
+        32,
+        calculatedSize
+      )
+    );
+  };
 
-    if (length <= 30) {
-      return "text-[18px]";
-    }
+  /*
+    Single-line selector renderer.
 
-    if (length <= 36) {
-      return "text-[16px]";
-    }
+    No wrapping.
+    No word splitting.
+    No clipping caused by long names.
+  */
+  const renderSelectionText = (
+    value
+  ) => {
+    if (!value) return null;
 
-    return "text-[14px]";
+    return (
+      <span
+        className="block whitespace-nowrap"
+        style={{
+          fontSize: `${getSelectionFontSize(
+            value
+          )}px`,
+          lineHeight: "1",
+        }}
+      >
+        {value}
+      </span>
+    );
   };
 
   return (
@@ -1664,34 +1691,25 @@ export default function App() {
               </div>
             </div>
 
-            {/* CATEGORY + TOPIC */}
             <div className="mt-[22px] grid grid-cols-2 gap-[10px]">
               <div className="text-center min-w-0">
                 <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[25px]">
                   CATEGORY
                 </div>
 
-                <div className="h-[96px] flex items-center justify-center select-none relative px-[8px]">
+                <div className="h-[96px] flex items-center justify-center select-none relative px-[8px] overflow-hidden">
                   <div
-                    className={`
-                      w-full
-                      max-w-[205px]
-                      text-center
-                      leading-[1.05]
-                      font-bold
-                      tracking-[-0.06em]
-                      break-words
-                      overflow-wrap-anywhere
-                      line-clamp-2
-                      ${getSelectionTextClass(
+                    className="w-full max-w-[205px] text-center leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-visible"
+                    style={{
+                      fontSize: `${getSelectionFontSize(
                         settings.category
-                      )}
-                    `}
+                      )}px`,
+                    }}
                   >
                     {settings.category}
                   </div>
 
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[76px] pointer-events-none">
+                  <div className="absolute left-1/2 -top-[6px] -translate-x-1/2 w-[120px] h-[108px] pointer-events-none">
                     <button
                       onClick={() => {
                         const index =
@@ -1710,7 +1728,7 @@ export default function App() {
                         );
                       }}
                       aria-label="Next category"
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center top-0 hover:text-white active:scale-90 transition-transform"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white active:scale-90 transition-transform"
                     >
                       ▲
                     </button>
@@ -1735,7 +1753,7 @@ export default function App() {
                         );
                       }}
                       aria-label="Previous category"
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-0 hover:text-white active:scale-90 transition-transform"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white active:scale-90 transition-transform"
                     >
                       ▼
                     </button>
@@ -1748,27 +1766,19 @@ export default function App() {
                   TOPIC
                 </div>
 
-                <div className="h-[96px] flex items-center justify-center select-none relative px-[8px]">
+                <div className="h-[96px] flex items-center justify-center select-none relative px-[8px] overflow-hidden">
                   <div
-                    className={`
-                      w-full
-                      max-w-[205px]
-                      text-center
-                      leading-[1.05]
-                      font-bold
-                      tracking-[-0.06em]
-                      break-words
-                      overflow-wrap-anywhere
-                      line-clamp-2
-                      ${getSelectionTextClass(
+                    className="w-full max-w-[205px] text-center leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-visible"
+                    style={{
+                      fontSize: `${getSelectionFontSize(
                         settings.topic
-                      )}
-                    `}
+                      )}px`,
+                    }}
                   >
                     {settings.topic}
                   </div>
 
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[180px] h-[76px] pointer-events-none">
+                  <div className="absolute left-1/2 -top-[6px] -translate-x-1/2 w-[120px] h-[108px] pointer-events-none">
                     <button
                       onClick={() => {
                         const index =
@@ -1790,7 +1800,7 @@ export default function App() {
                         );
                       }}
                       aria-label="Next topic"
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center top-0 hover:text-white active:scale-90 transition-transform"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center -top-[2px] hover:text-white active:scale-90 transition-transform"
                     >
                       ▲
                     </button>
@@ -1818,7 +1828,7 @@ export default function App() {
                         );
                       }}
                       aria-label="Previous topic"
-                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-0 hover:text-white active:scale-90 transition-transform"
+                      className="absolute left-1/2 -translate-x-1/2 w-[40px] h-[25px] border-none bg-transparent text-[#444] cursor-pointer pointer-events-auto grid place-items-center bottom-[2px] hover:text-white active:scale-90 transition-transform"
                     >
                       ▼
                     </button>
@@ -1921,11 +1931,6 @@ export default function App() {
 
         * {
           box-sizing: border-box;
-        }
-
-        .overflow-wrap-anywhere {
-          overflow-wrap: anywhere;
-          word-break: normal;
         }
 
         @keyframes modalFadeIn {
