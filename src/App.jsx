@@ -1,865 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import spinSoundUrl from "./offscripted-audio.mp3";
+import questionBanks from "./topics";
+import categoryTopics from "./catagories";
 
-// Duration (ms) of the spin sound effect. The spin animation's
-// tick timing is scaled to add up to exactly this long, so the
-// visuals land in sync with the audio ending.
 const SPIN_SOUND_DURATION_MS = 3683;
-
-const questionBanks = {
-  HTML: [
-    "Document Structure",
-    "DOCTYPE",
-    "HTML Elements",
-    "HTML Attributes",
-    "Semantic Elements",
-    "Headings",
-    "Paragraphs",
-    "Text Formatting",
-    "Links",
-    "Images",
-    "Lists",
-    "Tables",
-    "Forms",
-    "Input Types",
-    "Form Validation",
-    "Buttons",
-    "Select and Option",
-    "Audio and Video",
-    "Iframes",
-    "Canvas",
-    "SVG",
-    "Meta Tags",
-    "Accessibility",
-    "ARIA",
-    "SEO",
-  ],
-
-  CSS: [
-    "Selectors",
-    "Specificity",
-    "Cascade",
-    "Inheritance",
-    "Box Model",
-    "Display",
-    "Positioning",
-    "Z-Index",
-    "Overflow",
-    "Flexbox",
-    "Grid",
-    "Responsive Design",
-    "Media Queries",
-    "Units",
-    "Colors",
-    "Typography",
-    "Pseudo-Classes",
-    "Pseudo-Elements",
-    "Transitions",
-    "Transforms",
-    "Animations",
-    "Variables",
-    "Functions",
-    "BEM",
-    "Accessibility",
-  ],
-
-  JavaScript: [
-    "Variables",
-    "Data Types",
-    "Operators",
-    "Type Coercion",
-    "Conditionals",
-    "Loops",
-    "Functions",
-    "Arrow Functions",
-    "Scope",
-    "Hoisting",
-    "Closures",
-    "this Keyword",
-    "Objects",
-    "Arrays",
-    "Destructuring",
-    "Spread and Rest Operators",
-    "Template Literals",
-    "Array Methods",
-    "Higher-Order Functions",
-    "Promises",
-    "Async and Await",
-    "Event Loop",
-    "DOM Manipulation",
-    "Event Handling",
-    "ES Modules",
-  ],
-
-  TypeScript: [
-    "Type Annotations",
-    "Type Inference",
-    "Primitive Types",
-    "Arrays and Tuples",
-    "Enums",
-    "Union Types",
-    "Intersection Types",
-    "Literal Types",
-    "Type Aliases",
-    "Interfaces",
-    "Interface Extension",
-    "Optional Properties",
-    "Readonly Properties",
-    "Function Types",
-    "Optional Parameters",
-    "Generics",
-    "Generic Constraints",
-    "Type Guards",
-    "Type Assertions",
-    "Keyof Operator",
-    "Typeof Operator",
-    "Utility Types",
-    "Mapped Types",
-    "Conditional Types",
-    "Modules",
-  ],
-
-  React: [
-    "Components",
-    "JSX",
-    "Props",
-    "State",
-    "Event Handling",
-    "Conditional Rendering",
-    "List Rendering",
-    "Keys",
-    "Forms",
-    "Controlled Components",
-    "Uncontrolled Components",
-    "useState",
-    "useEffect",
-    "useRef",
-    "useMemo",
-    "useCallback",
-    "useContext",
-    "Custom Hooks",
-    "Component Lifecycle",
-    "Lifting State Up",
-    "Prop Drilling",
-    "Context API",
-    "React Router",
-    "Performance Optimization",
-    "Error Boundaries",
-  ],
-
-  "Next.js": [
-    "App Router",
-    "Pages Router",
-    "File-Based Routing",
-    "Dynamic Routes",
-    "Nested Routes",
-    "Route Groups",
-    "Layouts",
-    "Loading UI",
-    "Error Handling",
-    "Server Components",
-    "Client Components",
-    "Server Actions",
-    "Data Fetching",
-    "Caching",
-    "Revalidation",
-    "Static Rendering",
-    "Dynamic Rendering",
-    "Incremental Static Regeneration",
-    "Middleware",
-    "Route Handlers",
-    "API Routes",
-    "Metadata",
-    "Image Optimization",
-    "Font Optimization",
-    "Authentication",
-  ],
-
-  Angular: [
-    "Components",
-    "Templates",
-    "Data Binding",
-    "Interpolation",
-    "Property Binding",
-    "Event Binding",
-    "Two-Way Binding",
-    "Directives",
-    "Structural Directives",
-    "Attribute Directives",
-    "Pipes",
-    "Services",
-    "Dependency Injection",
-    "Modules",
-    "Standalone Components",
-    "Routing",
-    "Route Parameters",
-    "Guards",
-    "Reactive Forms",
-    "Template-Driven Forms",
-    "Form Validation",
-    "Observables",
-    "RxJS",
-    "HTTP Client",
-    "Lifecycle Hooks",
-  ],
-
-  Vue: [
-    "Components",
-    "Templates",
-    "Directives",
-    "Data Binding",
-    "Event Handling",
-    "Computed Properties",
-    "Watchers",
-    "Conditional Rendering",
-    "List Rendering",
-    "Props",
-    "Emits",
-    "Slots",
-    "Component Lifecycle",
-    "Composition API",
-    "Options API",
-    "Reactive State",
-    "ref",
-    "reactive",
-    "computed",
-    "watch",
-    "Composables",
-    "Vue Router",
-    "Pinia",
-    "Forms",
-    "Transitions",
-  ],
-
-  Svelte: [
-    "Components",
-    "Svelte Syntax",
-    "Reactive Statements",
-    "Reactive Declarations",
-    "Props",
-    "Event Handling",
-    "Conditional Rendering",
-    "List Rendering",
-    "Bindings",
-    "Class Directives",
-    "Style Directives",
-    "Slots",
-    "Component Lifecycle",
-    "Stores",
-    "Writable Stores",
-    "Derived Stores",
-    "Context API",
-    "Actions",
-    "Transitions",
-    "Animations",
-    "Motion",
-    "SvelteKit",
-    "Routing",
-    "Server-Side Rendering",
-    "Form Actions",
-  ],
-
-  "Node.js": [
-    "Runtime Architecture",
-    "V8 Engine",
-    "Event Loop",
-    "Non-Blocking I/O",
-    "Asynchronous Programming",
-    "Callbacks",
-    "Promises",
-    "Async/Await",
-    "Event Emitters",
-    "Streams",
-    "Buffers",
-    "File System",
-    "Path Module",
-    "HTTP Module",
-    "URL Module",
-    "Process Object",
-    "Environment Variables",
-    "CommonJS Modules",
-    "ES Modules",
-    "NPM",
-    "Package Management",
-    "package.json",
-    "Middleware",
-    "Error Handling",
-    "Child Processes",
-  ],
-
-  "Express.js": [
-    "Application Setup",
-    "Routing",
-    "Route Parameters",
-    "Query Parameters",
-    "Request Object",
-    "Response Object",
-    "Middleware",
-    "Application Middleware",
-    "Router Middleware",
-    "Built-in Middleware",
-    "Error Handling",
-    "Error Middleware",
-    "Request Validation",
-    "Response Handling",
-    "HTTP Methods",
-    "Route Handlers",
-    "Router",
-    "Nested Routers",
-    "Static Files",
-    "Template Engines",
-    "CORS",
-    "Cookies",
-    "Sessions",
-    "Authentication",
-    "API Development",
-  ],
-
-  NestJS: [
-    "Modules",
-    "Controllers",
-    "Providers",
-    "Services",
-    "Dependency Injection",
-    "Decorators",
-    "Middleware",
-    "Guards",
-    "Interceptors",
-    "Pipes",
-    "Exception Filters",
-    "Request Lifecycle",
-    "Routing",
-    "Route Parameters",
-    "Query Parameters",
-    "Request Validation",
-    "DTOs",
-    "Class Validators",
-    "Custom Decorators",
-    "Configuration",
-    "Environment Variables",
-    "Authentication",
-    "Authorization",
-    "JWT",
-    "Database Integration",
-  ],
-
-  Python: [
-    "Variables",
-    "Data Types",
-    "Operators",
-    "Type Conversion",
-    "Conditional Statements",
-    "Loops",
-    "Functions",
-    "Lambda Functions",
-    "Scope",
-    "Arguments and Parameters",
-    "Lists",
-    "Tuples",
-    "Sets",
-    "Dictionaries",
-    "List Comprehensions",
-    "String Manipulation",
-    "Exception Handling",
-    "File Handling",
-    "Modules",
-    "Packages",
-    "Object-Oriented Programming",
-    "Iterators",
-    "Generators",
-    "Decorators",
-    "Context Managers",
-  ],
-
-  Django: [
-    "Project Structure",
-    "Apps",
-    "URL Routing",
-    "Views",
-    "Templates",
-    "Template Inheritance",
-    "Models",
-    "Model Fields",
-    "Migrations",
-    "Django ORM",
-    "QuerySets",
-    "Model Relationships",
-    "Forms",
-    "Form Validation",
-    "Middleware",
-    "Authentication",
-    "Authorization",
-    "Sessions",
-    "Cookies",
-    "Static Files",
-    "Media Files",
-    "Admin Interface",
-    "Class-Based Views",
-    "REST Framework",
-    "Caching",
-  ],
-
-  FastAPI: [
-    "Application Setup",
-    "Path Operations",
-    "Path Parameters",
-    "Query Parameters",
-    "Request Body",
-    "Response Models",
-    "Pydantic Models",
-    "Data Validation",
-    "Type Hints",
-    "Dependency Injection",
-    "Dependencies",
-    "Middleware",
-    "Exception Handling",
-    "Custom Exceptions",
-    "HTTP Status Codes",
-    "Headers",
-    "Cookies",
-    "File Uploads",
-    "Form Data",
-    "Authentication",
-    "Authorization",
-    "OAuth2",
-    "JWT Authentication",
-    "Background Tasks",
-    "Async Endpoints",
-  ],
-
-  Java: [
-    "Variables",
-    "Data Types",
-    "Operators",
-    "Type Casting",
-    "Conditional Statements",
-    "Loops",
-    "Methods",
-    "Method Overloading",
-    "Classes and Objects",
-    "Constructors",
-    "Inheritance",
-    "Polymorphism",
-    "Abstraction",
-    "Encapsulation",
-    "Interfaces",
-    "Abstract Classes",
-    "Access Modifiers",
-    "Static Keyword",
-    "Final Keyword",
-    "Exception Handling",
-    "Collections Framework",
-    "Generics",
-    "Multithreading",
-    "Streams",
-    "Lambda Expressions",
-  ],
-
-  "Spring Boot": [
-    "Project Structure",
-    "Application Configuration",
-    "Spring Boot Starters",
-    "Dependency Injection",
-    "Inversion of Control",
-    "Beans",
-    "Component Scanning",
-    "Annotations",
-    "Controllers",
-    "REST APIs",
-    "Request Mapping",
-    "Request Parameters",
-    "Request Body",
-    "Response Entities",
-    "Exception Handling",
-    "Validation",
-    "Profiles",
-    "Configuration Properties",
-    "Spring Data JPA",
-    "Entities",
-    "Repositories",
-    "Database Relationships",
-    "Transactions",
-    "Spring Security",
-    "Actuator",
-  ],
-
-  "C#": [
-    "Variables",
-    "Data Types",
-    "Operators",
-    "Type Casting",
-    "Conditional Statements",
-    "Loops",
-    "Methods",
-    "Method Overloading",
-    "Classes and Objects",
-    "Constructors",
-    "Inheritance",
-    "Polymorphism",
-    "Encapsulation",
-    "Abstraction",
-    "Interfaces",
-    "Abstract Classes",
-    "Properties",
-    "Access Modifiers",
-    "Static Members",
-    "Exception Handling",
-    "Collections",
-    "Generics",
-    "Delegates",
-    "LINQ",
-    "Async and Await",
-  ],
-
-  ".NET": [
-    "Runtime",
-    "CLR",
-    "CTS",
-    "CLS",
-    "Assemblies",
-    "Namespaces",
-    "Dependency Injection",
-    "Configuration",
-    "Middleware",
-    "Routing",
-    "Controllers",
-    "Minimal APIs",
-    "Web APIs",
-    "Model Binding",
-    "Model Validation",
-    "Entity Framework Core",
-    "LINQ",
-    "Authentication",
-    "Authorization",
-    "Exception Handling",
-    "Logging",
-    "Caching",
-    "Async Programming",
-    "Background Services",
-    "Application Configuration",
-  ],
-
-  Go: [
-    "Variables",
-    "Data Types",
-    "Constants",
-    "Operators",
-    "Type Conversion",
-    "Conditional Statements",
-    "Loops",
-    "Functions",
-    "Multiple Return Values",
-    "Pointers",
-    "Structs",
-    "Methods",
-    "Interfaces",
-    "Embedding",
-    "Packages",
-    "Modules",
-    "Error Handling",
-    "Goroutines",
-    "Channels",
-    "Select Statement",
-    "Concurrency",
-    "Mutexes",
-    "Context",
-    "Generics",
-    "Reflection",
-  ],
-
-  PHP: [
-    "Variables",
-    "Data Types",
-    "Operators",
-    "Type Conversion",
-    "Conditional Statements",
-    "Loops",
-    "Functions",
-    "Anonymous Functions",
-    "Closures",
-    "Scope",
-    "Arrays",
-    "Strings",
-    "Classes and Objects",
-    "Constructors",
-    "Inheritance",
-    "Interfaces",
-    "Traits",
-    "Namespaces",
-    "Exception Handling",
-    "Error Handling",
-    "Sessions",
-    "Cookies",
-    "File Handling",
-    "Database Connectivity",
-    "Composer",
-  ],
-
-  Laravel: [
-    "Application Structure",
-    "Routing",
-    "Controllers",
-    "Middleware",
-    "Requests",
-    "Responses",
-    "Blade Templates",
-    "Blade Components",
-    "Forms",
-    "Validation",
-    "Sessions",
-    "Cookies",
-    "Authentication",
-    "Authorization",
-    "Service Container",
-    "Service Providers",
-    "Facades",
-    "Eloquent ORM",
-    "Models",
-    "Migrations",
-    "Relationships",
-    "Query Builder",
-    "Queues",
-    "Events and Listeners",
-    "API Resources",
-  ],
-
-  Ruby: [
-    "Variables",
-    "Data Types",
-    "Operators",
-    "Type Conversion",
-    "Conditional Statements",
-    "Loops",
-    "Methods",
-    "Blocks",
-    "Procs",
-    "Lambdas",
-    "Arrays",
-    "Hashes",
-    "Strings",
-    "Symbols",
-    "Classes and Objects",
-    "Inheritance",
-    "Modules",
-    "Mixins",
-    "Encapsulation",
-    "Exception Handling",
-    "Iterators",
-    "Enumerables",
-    "Gems",
-    "Metaprogramming",
-    "Garbage Collection",
-  ],
-
-  SQL: [
-    "SELECT Queries",
-    "WHERE Clause",
-    "ORDER BY Clause",
-    "GROUP BY Clause",
-    "HAVING Clause",
-    "Aggregate Functions",
-    "String Functions",
-    "Date Functions",
-    "NULL Values",
-    "DISTINCT",
-    "LIMIT and OFFSET",
-    "Joins",
-    "INNER JOIN",
-    "LEFT JOIN",
-    "RIGHT JOIN",
-    "FULL JOIN",
-    "Subqueries",
-    "Common Table Expressions",
-    "Window Functions",
-    "CASE Expressions",
-    "Primary Keys",
-    "Foreign Keys",
-    "Constraints",
-    "Indexes",
-    "Transactions",
-  ],
-
-  "Postgres SQL": [
-    "Database and Schema",
-    "Tables",
-    "Data Types",
-    "Constraints",
-    "Primary Keys",
-    "Foreign Keys",
-    "Sequences",
-    "Indexes",
-    "Composite Indexes",
-    "Partial Indexes",
-    "Unique Indexes",
-    "Views",
-    "Materialized Views",
-    "Functions",
-    "Stored Procedures",
-    "Triggers",
-    "Transactions",
-    "Isolation Levels",
-    "Locks",
-    "MVCC",
-    "JSON and JSONB",
-    "Array Data Types",
-    "Common Table Expressions",
-    "Window Functions",
-    "Full-Text Search",
-  ],
-
-  MySQL: [
-    "Database and Schema",
-    "Tables",
-    "Data Types",
-    "Constraints",
-    "Primary Keys",
-    "Foreign Keys",
-    "Unique Constraints",
-    "Indexes",
-    "Composite Indexes",
-    "Views",
-    "Stored Procedures",
-    "Functions",
-    "Triggers",
-    "Transactions",
-    "Isolation Levels",
-    "Locks",
-    "ACID Properties",
-    "Joins",
-    "Subqueries",
-    "Common Table Expressions",
-    "Window Functions",
-    "JSON Data",
-    "Normalization",
-    "Query Optimization",
-    "EXPLAIN",
-  ],
-
-  SQLite: [
-    "Database Files",
-    "Tables",
-    "Data Types",
-    "Constraints",
-    "Primary Keys",
-    "Foreign Keys",
-    "Indexes",
-    "Composite Indexes",
-    "Unique Constraints",
-    "Views",
-    "Triggers",
-    "Transactions",
-    "ACID Properties",
-    "Journaling",
-    "WAL Mode",
-    "Querying",
-    "Joins",
-    "Subqueries",
-    "Common Table Expressions",
-    "Window Functions",
-    "Aggregate Functions",
-    "JSON Functions",
-    "Full-Text Search",
-    "Query Optimization",
-    "SQLite Pragmas",
-  ],
-
-  MongoDB: [
-    "Databases",
-    "Collections",
-    "Documents",
-    "BSON",
-    "Data Types",
-    "CRUD Operations",
-    "Insert Operations",
-    "Query Operations",
-    "Update Operations",
-    "Delete Operations",
-    "Query Operators",
-    "Array Operators",
-    "Projection",
-    "Sorting",
-    "Pagination",
-    "Indexes",
-    "Compound Indexes",
-    "Text Indexes",
-    "Aggregation",
-    "Aggregation Pipeline",
-    "Aggregation Operators",
-    "Lookup",
-    "Schema Design",
-    "Transactions",
-    "Replication",
-  ],
-
-  Redis: [
-    "Key-Value Data Model",
-    "Strings",
-    "Lists",
-    "Sets",
-    "Sorted Sets",
-    "Hashes",
-    "Streams",
-    "Bitmaps",
-    "HyperLogLog",
-    "Geospatial Data",
-    "TTL and Expiration",
-    "Persistence",
-    "RDB Snapshots",
-    "AOF Persistence",
-    "Eviction Policies",
-    "Memory Management",
-    "Transactions",
-    "Pipelining",
-    "Pub/Sub",
-    "Lua Scripting",
-    "Distributed Locks",
-    "Caching",
-    "Session Storage",
-    "Rate Limiting",
-    "Redis Cluster",
-  ],
-};
-
-const categoryTopics = {
-  Frontend: [
-    "React",
-    "JavaScript",
-    "CSS",
-    "TypeScript",
-    "HTML",
-    "Next.js",
-    "Angular",
-    "Vue.js",
-    "Svelte",
-  ],
-
-  Backend: [
-    "Node.js",
-    "Express.js",
-    "NestJS",
-    "Python",
-    "Django",
-    "FastAPI",
-    "Java",
-    "Spring Boot",
-    "C#",
-    ".NET",
-    "Go",
-    "PHP",
-    "Laravel",
-    "Ruby",
-  ],
-
-  Database: [
-    "MongoDB",
-    "Postgres SQL",
-    "MySQL",
-    "SQLite",
-    "SQL",
-    "Redis",
-  ],
-};
-
 const categories = Object.keys(categoryTopics);
 
 export default function App() {
@@ -1137,8 +281,6 @@ export default function App() {
     }
   };
 
-  // No longer called during spin (the uploaded spin sound plays
-  // instead), kept here in case it's needed elsewhere.
   const playTick = (intensity = 1) => {
     if (settings.muted) return;
 
@@ -1264,9 +406,7 @@ export default function App() {
     spinAudio.currentTime = 0;
     spinAudio.loop = false;
 
-    spinAudio
-      .play()
-      .catch(() => {});
+    spinAudio.play().catch(() => {});
   };
 
   const stopSpinSound = () => {
@@ -1276,10 +416,6 @@ export default function App() {
     spinAudioRef.current.currentTime = 0;
   };
 
-  /*
-    ONLY USE QUESTIONS FROM questionBanks.
-    No fallback questions are used.
-  */
   const getRandomQuestion = (topic) => {
     const questions = questionBanks[topic];
 
@@ -1352,9 +488,6 @@ export default function App() {
         Math.random() * 12
       );
 
-    // Same deceleration shape as before (fast at the start, slow
-    // near the end), but scaled so the ticks add up to exactly
-    // the spin sound's duration, keeping visuals and audio in sync.
     const rawDelays = [];
 
     for (let i = 0; i < totalTicks; i++) {
@@ -1828,6 +961,45 @@ export default function App() {
     }));
   };
 
+  /*
+    Dynamic font sizing for category/topic names.
+
+    Short names stay large.
+    Longer names become progressively smaller.
+    Very long names are allowed to wrap into two lines.
+  */
+  const getSelectionTextClass = (
+    value
+  ) => {
+    if (!value) {
+      return "text-[32px]";
+    }
+
+    const length = value.length;
+
+    if (length <= 8) {
+      return "text-[32px]";
+    }
+
+    if (length <= 12) {
+      return "text-[29px]";
+    }
+
+    if (length <= 16) {
+      return "text-[26px]";
+    }
+
+    if (length <= 20) {
+      return "text-[23px]";
+    }
+
+    if (length <= 25) {
+      return "text-[20px]";
+    }
+
+    return "text-[18px]";
+  };
+
   return (
     <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] overflow-hidden overscroll-none flex flex-col bg-[#050505] text-[#f5f5f5] selection:bg-neutral-800">
       <header className="h-[78px] px-[20px] sm:px-[34px] flex items-center justify-between shrink-0">
@@ -2158,7 +1330,7 @@ export default function App() {
 
       {isSettingsOpen && (
         <div
-          className="fixed inset-0 z-[200] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[20px] overflow-hidden"
+          className="fixed inset-0 z-[200] bg-black/72 backdrop-blur-[14px] flex items-center justify-center p-[14px] sm:p-[20px] overflow-hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Settings"
@@ -2171,7 +1343,7 @@ export default function App() {
             }
           }}
         >
-          <div className="w-full max-w-[430px] max-h-[90dvh] overflow-hidden bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[23px]">
+          <div className="w-full max-w-[500px] max-h-[92dvh] overflow-hidden bg-[#0d0d0d] border border-[#242424] rounded-[20px] p-[23px] sm:p-[27px]">
             <div className="flex justify-between items-center mb-[27px]">
               <div className="text-[21px] font-extrabold tracking-[-0.05em]">
                 Settings
@@ -2486,14 +1658,29 @@ export default function App() {
               </div>
             </div>
 
+            {/* CATEGORY + TOPIC */}
             <div className="mt-[22px] grid grid-cols-2 gap-[10px]">
-              <div className="text-center">
+              <div className="text-center min-w-0">
                 <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[25px]">
                   CATEGORY
                 </div>
 
-                <div className="h-[96px] flex items-center justify-center gap-[6px] select-none relative">
-                  <div className="min-w-[150px] max-w-[230px] text-center text-[32px] leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-hidden text-ellipsis">
+                <div className="h-[96px] flex items-center justify-center select-none relative px-[8px]">
+                  <div
+                    className={`
+                      w-full
+                      max-w-[205px]
+                      text-center
+                      leading-[1.05]
+                      font-bold
+                      tracking-[-0.06em]
+                      break-words
+                      overflow-wrap-anywhere
+                      ${getSelectionTextClass(
+                        settings.category
+                      )}
+                    `}
+                  >
                     {settings.category}
                   </div>
 
@@ -2549,13 +1736,27 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="text-center">
+              <div className="text-center min-w-0">
                 <div className="text-[#8b8b8b] text-[10px] font-extrabold tracking-[0.18em] uppercase mb-[25px]">
                   TOPIC
                 </div>
 
-                <div className="h-[96px] flex items-center justify-center gap-[6px] select-none relative">
-                  <div className="min-w-[150px] max-w-[230px] text-center text-[32px] leading-none font-bold tracking-[-0.06em] whitespace-nowrap overflow-hidden text-ellipsis">
+                <div className="h-[96px] flex items-center justify-center select-none relative px-[8px]">
+                  <div
+                    className={`
+                      w-full
+                      max-w-[205px]
+                      text-center
+                      leading-[1.05]
+                      font-bold
+                      tracking-[-0.06em]
+                      break-words
+                      overflow-wrap-anywhere
+                      ${getSelectionTextClass(
+                        settings.topic
+                      )}
+                    `}
+                  >
                     {settings.topic}
                   </div>
 
@@ -2712,6 +1913,11 @@ export default function App() {
 
         * {
           box-sizing: border-box;
+        }
+
+        .overflow-wrap-anywhere {
+          overflow-wrap: anywhere;
+          word-break: normal;
         }
 
         @keyframes modalFadeIn {
